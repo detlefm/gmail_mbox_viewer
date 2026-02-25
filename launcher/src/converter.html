@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MBOX to MBXC Converter</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .progress-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--input-bg);
+            border-radius: 8px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: var(--bg-color);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.2s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .stat-item span:first-child {
+            font-weight: bold;
+            opacity: 0.7;
+        }
+
+        #btn-convert {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+            font-weight: bold;
+        }
+
+        #btn-convert:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="top-bar">
+            <h2>MBOX Converter</h2>
+            <div id="theme-toggle" title="Toggle Theme" style="cursor: pointer; font-size: 1.5rem;">🌓</div>
+        </div>
+
+        <fieldset>
+            <legend>Files</legend>
+            <div class="setting-row">
+                <span>MBOX</span>
+                <input id="mbox-input" class="path-display" type="text" placeholder="Select .mbox file...">
+                <button id="btn-browse-mbox" title="Browse MBOX" style="width: 40px;">...</button>
+            </div>
+            <div class="setting-row">
+                <span>Output</span>
+                <input id="mbxc-input" class="path-display" type="text" placeholder="Select output .mbxc path...">
+                <button id="btn-browse-mbxc" title="Browse Output" style="width: 40px;">...</button>
+            </div>
+        </fieldset>
+
+        <button id="btn-convert">Start Conversion</button>
+
+        <div id="progress-section" class="progress-container hidden">
+            <div class="progress-bar-bg">
+                <div id="progress-fill" class="progress-bar-fill"></div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item"><span>Progress:</span> <span id="stat-percent">0%</span></div>
+                <div class="stat-item"><span>Status:</span> <span id="stat-status">Idle</span></div>
+                <div class="stat-item"><span>Elapsed:</span> <span id="stat-elapsed">0s</span></div>
+                <div class="stat-item"><span>ETA:</span> <span id="stat-eta">Calculating...</span></div>
+                <div class="stat-item"><span>Speed:</span> <span id="stat-speed">---</span></div>
+                <div class="stat-item"><span>Size:</span> <span id="stat-size">---</span></div>
+            </div>
+        </div>
+
+        <div id="log-view" class="log-view hidden" style="margin-top: 15px; height: 100px;"></div>
+    </div>
+
+    <script type="module" src="/converter.js" defer></script>
+</body>
+
+</html>

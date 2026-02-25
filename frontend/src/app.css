@@ -1,0 +1,79 @@
+:root {
+  font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* CSS Variables for Theme */
+  --bg-color: #f6f8fc;
+  --surface-color: #ffffff;
+  --text-color: #202124;
+  --text-secondary: #5f6368;
+  --border-color: #f1f3f4;
+  --border-strong: #dadce0;
+  --hover-color: rgba(60, 64, 67, 0.08);
+  --input-bg: #f1f3f4;
+  --accent-color: #1a73e8;
+  --sidebar-active: #e8f0fe;
+  --sidebar-active-text: #1967d2;
+}
+
+:root[data-theme='dark'] {
+  --bg-color: #1a1a1a;
+  --surface-color: #242424;
+  --text-color: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --border-color: #3c4043;
+  --border-strong: #5f6368;
+  --hover-color: rgba(255, 255, 255, 0.1);
+  --input-bg: #3c4043;
+  --accent-color: #8ab4f8;
+  --sidebar-active: #3c4043;
+  --sidebar-active-text: #8ab4f8;
+  
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+button {
+  font-family: inherit;
+}
+
+input, select {
+  font-family: inherit;
+}
+

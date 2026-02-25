@@ -1,0 +1,58 @@
+# --- Python ---
+__pycache__/
+*.py[oc]
+*.pyd
+*.so
+build/
+dist/
+wheels/
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.env
+
+# --- Rust ---
+target/
+**/target/
+**/*.rs.bk
+Cargo.lock.backup
+
+# --- Node / Svelte / Vite ---
+node_modules/
+**/node_modules/
+.svelte-kit/
+dist/
+**/dist/
+dist-ssr/
+*.local
+.env.local
+.env.*.local
+.vercel/
+
+# --- IDEs & OS ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.sublime-project
+*.sublime-workspace
+
+# --- Project Specific & Data ---
+data/
+doku/
+temp/
+*.db
+!metadata_template.db
+# Ignore extracted metadata from the backend
+metadata.db
+**/metadata.db
+
+# Tauri v2 generated files
+src-tauri/gen/
+
+# build files
+builds/

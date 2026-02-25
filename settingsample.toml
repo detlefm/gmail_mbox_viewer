@@ -1,0 +1,16 @@
+zip_path = "<path to your .mbxc file>"
+filter_labels = [
+  "Markiert",
+  "Chat",
+  "Spam",
+  "Abrechnungen nach Kategorie",
+  "Wichtig",
+  "Geöffnet",
+  "Ungelesen",
+  "Archiviert"
+]
+special_labels = [
+  "Spam",
+  "Papierkorb",
+  "Gesendet"
+]

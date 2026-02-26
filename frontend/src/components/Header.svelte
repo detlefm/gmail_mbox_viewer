@@ -5,6 +5,9 @@
     export let onToggleTheme = undefined;
     export let theme = "auto";
     export let archiveName = "Keine Datenquelle";
+    export let viewMode = "viewer";
+    export let onOpenManagement = undefined;
+    export let onOpenViewer = undefined;
 
     function handleSearch() {
         if (onSearch) {
@@ -66,6 +69,24 @@
         >
             {theme === "light" ? "🌙" : theme === "dark" ? "☀️" : "🌓"}
         </button>
+
+        {#if viewMode === "viewer"}
+            <button
+                class="icon-btn management-toggle"
+                on:click={onOpenManagement}
+                title="Management / Settings"
+            >
+                ⚙️
+            </button>
+        {:else}
+            <button
+                class="icon-btn viewer-toggle"
+                on:click={onOpenViewer}
+                title="Back to Mail View"
+            >
+                ✉️
+            </button>
+        {/if}
         <slot />
     </div>
 </header>

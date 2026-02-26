@@ -9,8 +9,10 @@ use base64::Engine;
 use mail_parser::{MessageParser, MimeHeaders};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use rfd::FileDialog;
 use serde::Deserialize;
 use std::io::Read;
+use std::path::PathBuf;
 
 static RE_RFC2047: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)=\?([^?]+)\?([QB])\?([^?]*)\?=").unwrap());
@@ -239,10 +241,12 @@ pub async fn get_message(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     // Use cached ZIP
-    let mut archive = state
+    let mut archive_guard = state
         .zip_archive
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let archive = archive_guard.as_mut().ok_or(StatusCode::NOT_FOUND)?;
 
     let mut eml_file = archive.by_name(&id).map_err(|_| StatusCode::NOT_FOUND)?;
     let mut buffer = Vec::new();
@@ -333,9 +337,14 @@ pub async fn download_attachment(
     Path((id, filename)): Path<(String, String)>,
 ) -> Response {
     // Use cached ZIP
-    let mut archive = match state.zip_archive.lock() {
+    let mut archive_guard = match state.zip_archive.lock() {
         Ok(a) => a,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let archive = match archive_guard.as_mut() {
+        Some(a) => a,
+        None => return StatusCode::NOT_FOUND.into_response(),
     };
 
     let mut eml_file = match archive.by_name(&id) {
@@ -448,6 +457,101 @@ pub async fn get_system_info(State(state): State<AppState>) -> Json<serde_json::
     Json(serde_json::json!({
         "instance_id": state.instance_id,
         "zip_path": state.zip_path.to_string_lossy(),
-        "db_loaded": state.db_conn.lock().unwrap().is_some()
+        "db_loaded": state.db_conn.lock().unwrap().is_some(),
+        "settings_path": state.settings.source_path.as_ref().map(|p| p.to_string_lossy()),
+        "browser": state.settings.browser,
+    }))
+}
+
+pub async fn select_file() -> Json<serde_json::Value> {
+    let file = FileDialog::new()
+        .add_filter("MBOX or MBXC", &["mbox", "mbxc"])
+        .pick_file();
+
+    Json(serde_json::json!({
+        "path": file.map(|p| p.to_string_lossy().to_string())
+    }))
+}
+
+pub async fn select_save_file() -> Json<serde_json::Value> {
+    let file = FileDialog::new()
+        .add_filter("MBXC Archive", &["mbxc"])
+        .save_file();
+
+    Json(serde_json::json!({
+        "path": file.map(|p| p.to_string_lossy().to_string())
+    }))
+}
+
+pub async fn select_toml_file() -> Json<serde_json::Value> {
+    let file = FileDialog::new()
+        .add_filter("Settings", &["toml"])
+        .pick_file();
+
+    Json(serde_json::json!({
+        "path": file.map(|p| p.to_string_lossy().to_string())
+    }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct ConvertRequest {
+    pub mbox_path: String,
+    pub mbxc_path: String,
+}
+
+pub async fn convert_mbox(
+    Json(req): Json<ConvertRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mbox_path = PathBuf::from(req.mbox_path);
+    let mbxc_path = PathBuf::from(req.mbxc_path);
+
+    // Call mbox2zip logic
+    match mbox2zip::convert_mbox_to_mbxc(mbox_path, mbxc_path, None) {
+        Ok(_) => Ok(Json(serde_json::json!({ "status": "success" }))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct SettingsUpdateRequest {
+    pub zip_path: String,
+    pub browser: Option<String>,
+}
+
+pub async fn update_settings(
+    State(state): State<AppState>,
+    Json(req): Json<SettingsUpdateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let settings_path = state.settings.source_path.as_ref().ok_or((
+        StatusCode::BAD_REQUEST,
+        "No settings file location found".to_string(),
+    ))?;
+
+    // Simple TOML update or just overwrite (since we only have a few fields)
+    let new_content = format!("zip_path = {:?}\nbrowser = {:?}", req.zip_path, req.browser);
+
+    std::fs::write(settings_path, new_content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "status": "restarting" })))
+}
+
+#[derive(serde::Deserialize)]
+pub struct RestartRequest {
+    pub settings_path: String,
+}
+
+pub async fn restart_with_settings(Json(req): Json<RestartRequest>) -> Json<serde_json::Value> {
+    // We can't easily "restart" the process from here if we're inside the same process.
+    // However, we can tell the launcher (which is monitoring the backend) or just exit and hope for the best.
+    // In this architecture, let's assume the launcher should be told.
+    // But for a simple web app, we can write a 'restart' flag file or use a command.
+
+    // For now, let's just log it. The launcher part will be trickier if it's strictly a Tokio task.
+    // If it's a Tokio task, we return a special status and the main loop handles it.
+
+    Json(serde_json::json!({
+        "status": "switching",
+        "next_path": req.settings_path
     }))
 }

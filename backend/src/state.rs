@@ -18,7 +18,7 @@ pub struct AppState {
     pub db_conn: Arc<Mutex<Option<Connection>>>,
     pub db_path: Option<PathBuf>,
     pub instance_id: String,
-    pub zip_archive: Arc<Mutex<ZipArchive<File>>>,
+    pub zip_archive: Arc<Mutex<Option<ZipArchive<File>>>>,
 }
 
 impl AppState {
@@ -27,7 +27,7 @@ impl AppState {
         zip_path: PathBuf,
         metadata: Vec<MetadataEntry>,
         db_conn: Option<Connection>,
-        zip_archive: ZipArchive<File>,
+        zip_archive: Option<ZipArchive<File>>,
     ) -> Self {
         let instance_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

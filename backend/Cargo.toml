@@ -1,6 +1,6 @@
 [package]
 name = "backend"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Detlef Meyer"]
 license = "MIT"
 edition = "2021"
@@ -32,3 +32,6 @@ quoted_printable = "0.5"
 once_cell = "1.18"
 regex = "1.10"
 tempfile = "3.25.0"
+rfd = "0.15"
+# Local conversion logic
+mbox2zip = { path = "../tools/mbox2zip" }

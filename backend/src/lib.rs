@@ -77,7 +77,7 @@ pub fn init_app_state(
 
     // 2. Resolve Zip Path
     let mut zip_path = PathBuf::from(&settings.zip_path);
-    
+
     // If path is relative, resolve it relative to the settings.toml location
     if zip_path.is_relative() {
         if let Some(source_path) = &settings.source_path {
@@ -92,7 +92,8 @@ pub fn init_app_state(
 
     // 3. Load Metadata and DB
     if !zip_path.exists() {
-        return Err(format!("Zip path not found: {:?}", zip_path).into());
+        log_err(format!("Archiv nicht gefunden unter: {:?}", zip_path));
+        return Ok(AppState::new(settings, zip_path, Vec::new(), None, None));
     }
 
     let file = File::open(&zip_path)?;
@@ -103,11 +104,12 @@ pub fn init_app_state(
     match archive.by_name("metadata.json") {
         Ok(mut file) => {
             let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            metadata = serde_json::from_str(&content)?;
-            log(format!("Lade {} Nachrichten ...", metadata.len()));
+            if file.read_to_string(&mut content).is_ok() {
+                metadata = serde_json::from_str(&content).unwrap_or_default();
+                log(format!("Lade {} Nachrichten ...", metadata.len()));
+            }
         }
-        Err(e) => log_err(format!("Could not find metadata.json: {}", e)),
+        Err(e) => log_err(format!("metadata.json nicht gefunden: {}", e)),
     }
 
     log("Verarbeite Daten ...".to_string());
@@ -119,7 +121,13 @@ pub fn init_app_state(
     }
 
     // 4. Initialize State
-    Ok(AppState::new(settings, zip_path, metadata, db_conn, archive))
+    Ok(AppState::new(
+        settings,
+        zip_path,
+        metadata,
+        db_conn,
+        Some(archive),
+    ))
 }
 
 pub async fn run_server_with_state(
@@ -208,7 +216,13 @@ pub async fn run_server_with_state(
                     "/messages/:id/attachment/:filename",
                     get(api::download_attachment),
                 )
-                .route("/system/info", get(api::get_system_info)),
+                .route("/system/info", get(api::get_system_info))
+                .route("/system/select-file", post(api::select_file))
+                .route("/system/select-save-file", post(api::select_save_file))
+                .route("/system/select-toml", post(api::select_toml_file))
+                .route("/system/convert", post(api::convert_mbox))
+                .route("/system/settings", post(api::update_settings))
+                .route("/system/restart", post(api::restart_with_settings)),
         )
         .fallback_service(
             ServeDir::new(dist_path.clone())

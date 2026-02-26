@@ -6,6 +6,7 @@
   import MessageDetail from "./components/MessageDetail.svelte";
   import SearchPopup from "./components/SearchPopup.svelte";
   import ListHeader from "./components/ListHeader.svelte";
+  import Management from "./components/Management.svelte";
   import * as api from "./lib/api";
 
   let labels = [];
@@ -24,6 +25,9 @@
   let lastInstanceId = null;
   let lastZipPath = null;
   let showReloadNotify = false;
+  let dbLoaded = false;
+  let initLoading = true;
+  let viewMode = "viewer"; // 'viewer' or 'management'
 
   $: archiveName = getArchiveName(lastZipPath);
 
@@ -41,6 +45,15 @@
       }
       lastInstanceId = info.instance_id;
       lastZipPath = info.zip_path;
+      dbLoaded = info.db_loaded;
+
+      if (initLoading) {
+        initLoading = false;
+        // If nothing is loaded on first check, suggest management
+        if (!dbLoaded) {
+          viewMode = "management";
+        }
+      }
     } catch (e) {
       // Ignore errors (e.g. during restart)
     }
@@ -353,137 +366,160 @@
   <Header
     onSearch={handleSimpleSearch}
     onOpenAdvanced={() => (showSearchPopup = true)}
+    onOpenManagement={() => (viewMode = "management")}
+    onOpenViewer={() => (viewMode = "viewer")}
+    {viewMode}
     onToggleTheme={toggleTheme}
     {theme}
     {archiveName}
   />
 
   <div class="main-layout">
-    <div class="sidebar-container">
-      <Sidebar {labels} {selectedLabel} onSelect={handleLabelSelect} />
-    </div>
+    {#if viewMode === "management"}
+      <Management onReload={() => window.location.reload()} />
+    {:else}
+      <div class="sidebar-container">
+        <Sidebar {labels} {selectedLabel} onSelect={handleLabelSelect} />
+      </div>
 
-    <div class="main-content">
-      <!-- Header Panel - Full width above content area -->
-      {#if layoutMode === "no-split" && selectedMessage}
-        <div class="header-panel">
-          <button class="back-btn" on:click={goBackToList}>
-            ← Back to list
-          </button>
-          <div class="right-section">
-            <div class="pagination-info">
-              <span class="page-text"
-                >{selectedMessageIndex + 1} von {messages.length}</span
-              >
-              <div class="nav-buttons">
-                <button
-                  class="nav-btn"
-                  disabled={selectedMessageIndex <= 0}
-                  on:click={prevMessage}
-                  aria-label="Previous message"
+      <div class="main-content">
+        <!-- Header Panel - Full width above content area -->
+        {#if layoutMode === "no-split" && selectedMessage}
+          <div class="header-panel">
+            <button class="back-btn" on:click={goBackToList}>
+              ← Back to list
+            </button>
+            <div class="right-section">
+              <div class="pagination-info">
+                <span class="page-text"
+                  >{selectedMessageIndex + 1} von {messages.length}</span
                 >
-                  ‹
-                </button>
-                <button
-                  class="nav-btn"
-                  disabled={selectedMessageIndex >= messages.length - 1}
-                  on:click={nextMessage}
-                  aria-label="Next message"
-                >
-                  ›
-                </button>
+                <div class="nav-buttons">
+                  <button
+                    class="nav-btn"
+                    disabled={selectedMessageIndex <= 0}
+                    on:click={prevMessage}
+                    aria-label="Previous message"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    class="nav-btn"
+                    disabled={selectedMessageIndex >= messages.length - 1}
+                    on:click={nextMessage}
+                    aria-label="Next message"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+              <div class="layout-slot-placeholder"></div>
+            </div>
+          </div>
+        {:else}
+          <ListHeader
+            {currentPage}
+            totalPages={Math.ceil(totalMessages / pageSize)}
+            {pageSize}
+            totalItems={totalMessages}
+            {layoutMode}
+            showLayoutSelector={true}
+            onPageChange={handlePageChange}
+            onLayoutChange={handleLayoutChange}
+          />
+        {/if}
+
+        <div
+          class="content-area"
+          class:horizontal={layoutMode === "horizontal-split"}
+        >
+          <!-- List Panel -->
+          {#if layoutMode === "no-split" ? !selectedMessage : true}
+            <div
+              class="list-panel"
+              class:no-split={layoutMode === "no-split"}
+              style:width={layoutMode === "vertical-split"
+                ? `${listWidthPercent}%`
+                : null}
+              style:height={layoutMode === "horizontal-split"
+                ? `${listHeightPercent}%`
+                : null}
+            >
+              <div class="list-container">
+                {#if loading || initLoading}
+                  <div class="loading">Loading...</div>
+                {:else if error}
+                  <div class="error">{error}</div>
+                {:else if !dbLoaded}
+                  <div class="setup-notice">
+                    <div class="setup-info">
+                      <h3>Keine Datenquelle geladen</h3>
+                      <p>
+                        Wähle eine .mbxc Datei in den Einstellungen aus oder
+                        konvertiere eine MBOX Datei.
+                      </p>
+                      <button
+                        class="setup-btn"
+                        on:click={() => (viewMode = "management")}
+                      >
+                        Zu den Einstellungen
+                      </button>
+                    </div>
+                  </div>
+                {:else}
+                  <MessageList
+                    {messages}
+                    {selectedMessageId}
+                    {selectedLabel}
+                    onSelect={handleMessageSelect}
+                  />
+                {/if}
               </div>
             </div>
-            <div class="layout-slot-placeholder"></div>
-          </div>
+          {/if}
+
+          <!-- Resize Handle -->
+          {#if layoutMode !== "no-split"}
+            <div
+              class="resize-handle"
+              class:vertical={layoutMode === "vertical-split"}
+              class:horizontal={layoutMode === "horizontal-split"}
+              on:mousedown={(e) =>
+                startResize(
+                  e,
+                  layoutMode === "vertical-split" ? "vertical" : "horizontal",
+                )}
+              role="slider"
+              tabindex="0"
+              aria-label="Resize panel"
+              aria-valuemin="20"
+              aria-valuemax="80"
+              aria-valuenow={layoutMode === "vertical-split"
+                ? listWidthPercent
+                : listHeightPercent}
+            ></div>
+          {/if}
+
+          <!-- Detail Panel -->
+          {#if layoutMode === "no-split" ? selectedMessage : true}
+            <div
+              class="detail-panel"
+              class:no-split={layoutMode === "no-split"}
+              style:width={layoutMode === "vertical-split"
+                ? `${100 - listWidthPercent}%`
+                : null}
+              style:height={layoutMode === "horizontal-split"
+                ? `${100 - listHeightPercent}%`
+                : null}
+            >
+              <div class="detail-container">
+                <MessageDetail message={selectedMessage} />
+              </div>
+            </div>
+          {/if}
         </div>
-      {:else}
-        <ListHeader
-          {currentPage}
-          totalPages={Math.ceil(totalMessages / pageSize)}
-          {pageSize}
-          totalItems={totalMessages}
-          {layoutMode}
-          showLayoutSelector={true}
-          onPageChange={handlePageChange}
-          onLayoutChange={handleLayoutChange}
-        />
-      {/if}
-
-      <div
-        class="content-area"
-        class:horizontal={layoutMode === "horizontal-split"}
-      >
-        <!-- List Panel -->
-        {#if layoutMode === "no-split" ? !selectedMessage : true}
-          <div
-            class="list-panel"
-            class:no-split={layoutMode === "no-split"}
-            style:width={layoutMode === "vertical-split"
-              ? `${listWidthPercent}%`
-              : null}
-            style:height={layoutMode === "horizontal-split"
-              ? `${listHeightPercent}%`
-              : null}
-          >
-            <div class="list-container">
-              {#if loading}
-                <div class="loading">Loading...</div>
-              {:else if error}
-                <div class="error">{error}</div>
-              {:else}
-                <MessageList
-                  {messages}
-                  {selectedMessageId}
-                  {selectedLabel}
-                  onSelect={handleMessageSelect}
-                />
-              {/if}
-            </div>
-          </div>
-        {/if}
-
-        <!-- Resize Handle -->
-        {#if layoutMode !== "no-split"}
-          <div
-            class="resize-handle"
-            class:vertical={layoutMode === "vertical-split"}
-            class:horizontal={layoutMode === "horizontal-split"}
-            on:mousedown={(e) =>
-              startResize(
-                e,
-                layoutMode === "vertical-split" ? "vertical" : "horizontal",
-              )}
-            role="slider"
-            tabindex="0"
-            aria-label="Resize panel"
-            aria-valuemin="20"
-            aria-valuemax="80"
-            aria-valuenow={layoutMode === "vertical-split"
-              ? listWidthPercent
-              : listHeightPercent}
-          ></div>
-        {/if}
-
-        <!-- Detail Panel -->
-        {#if layoutMode === "no-split" ? selectedMessage : true}
-          <div
-            class="detail-panel"
-            class:no-split={layoutMode === "no-split"}
-            style:width={layoutMode === "vertical-split"
-              ? `${100 - listWidthPercent}%`
-              : null}
-            style:height={layoutMode === "horizontal-split"
-              ? `${100 - listHeightPercent}%`
-              : null}
-          >
-            <div class="detail-container">
-              <MessageDetail message={selectedMessage} />
-            </div>
-          </div>
-        {/if}
       </div>
-    </div>
+    {/if}
   </div>
 
   {#if showSearchPopup}
@@ -500,6 +536,14 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
+  }
+
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
     overflow: hidden;
   }
 
@@ -714,13 +758,53 @@
 
   .loading,
   .error {
+    color: var(--accent-color);
     padding: 2rem;
     text-align: center;
-    color: var(--text-secondary);
+    background: var(--surface-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    margin: 1rem;
   }
 
-  .error {
-    color: red;
+  .setup-notice {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: var(--surface-color);
+  }
+
+  .setup-info {
+    text-align: center;
+    max-width: 400px;
+    background: var(--bg-color);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  }
+
+  .setup-info h3 {
+    margin-top: 0;
+    color: var(--text-color);
+  }
+
+  .setup-info p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .setup-btn {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
   }
 
   /* Dynamic styles based on layout mode */

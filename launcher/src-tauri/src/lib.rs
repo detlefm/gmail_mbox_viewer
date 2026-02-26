@@ -301,20 +301,16 @@ fn start_backend_server(
 ) -> std::io::Result<()> {
     let state = app.state::<AppState>();
     let settings_path = PathBuf::from(settings_path_str);
-
-    // Basic validation
-    if !settings_path.exists() {
-        *state.status.lock().unwrap() = "Error: Settings file not found".to_string();
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("File not found: {:?}", settings_path),
-        ));
-    }
+    let settings_to_pass = if settings_path.exists() {
+        Some(settings_path)
+    } else {
+        None
+    };
 
     // Parse settings to get MBXC for the UI
     let current_port = *state.port.lock().unwrap();
     let current_browser = state.browser.lock().unwrap().clone();
-    if let Ok(settings) = Settings::new(Some(settings_path.clone())) {
+    if let Ok(settings) = Settings::new(settings_to_pass.clone()) {
         *state.mbxc_path.lock().unwrap() = settings.zip_path.clone();
         let _ = app.emit(
             "backend-config",
@@ -422,8 +418,14 @@ fn start_backend_server(
                 cache.as_ref().unwrap().0.clone()
             } else {
                 println!("Loading fresh backend state (force={}).", force_reload);
+                let settings_path_obj = PathBuf::from(&settings_path_str_owned);
+                let settings_to_pass = if settings_path_obj.exists() {
+                    Some(settings_path_obj)
+                } else {
+                    None
+                };
                 match backend::init_app_state(
-                    Some(settings_path.clone()),
+                    settings_to_pass,
                     Some(log_tx.clone()),
                 ) {
                     Ok(s) => {

@@ -238,19 +238,6 @@
                             </div>
                         </div>
 
-                        <div class="row">
-                            <label for="browser-input">Browser (Pfad):</label>
-                            <input
-                                id="browser-input"
-                                type="text"
-                                value={pendingSettingsPath
-                                    ? pendingBrowser
-                                    : browser}
-                                readonly
-                                placeholder="Standard-Browser"
-                            />
-                        </div>
-
                         <div class="actions">
                             <div class="action-buttons">
                                 <button

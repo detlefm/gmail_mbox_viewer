@@ -11,42 +11,18 @@
 <body>
   <div class="main-container">
     <div class="top-bar">
-      <div id="theme-toggle" title="Toggle Theme">🌓</div>
-      <div style="display: flex; gap: 8px;">
-        <button id="btn-open-converter" class="secondary">Convert MBOX</button>
-        <button id="btn-restart">Restart Backend</button>
-      </div>
+      <div></div>
+      <div></div>
     </div>
 
     <fieldset>
-      <legend>Settings</legend>
-      <div class="setting-row">
-        <span>toml</span>
-        <input id="settings-path" class="path-display" type="text" placeholder="Path to settings.toml...">
-        <button id="btn-select-file" title="Select File" style="width: 40px;">...</button>
-      </div>
-      <div id="edit-actions" class="setting-row hidden"
-        style="grid-template-columns: 1fr auto auto; margin-top: -5px; padding-bottom: 10px;">
-        <div></div> <!-- spacer -->
-        <button id="btn-cancel-edit" class="secondary small-btn">Cancel</button>
-        <button id="btn-apply-edit" class="small-btn">Apply</button>
-      </div>
-      <div class="setting-row">
-        <span>mbxc</span>
-        <div id="mbxc-path" class="path-display">---</div>
-        <div></div> <!-- spacer -->
-      </div>
+      <legend>System</legend>
       <div class="setting-row">
         <span>Port</span>
         <input id="port-input" class="path-display" type="number" min="1024" max="65535">
         <div></div> <!-- spacer -->
       </div>
-      <div id="port-edit-actions" class="setting-row hidden"
-        style="grid-template-columns: 1fr auto auto; margin-top: -5px;">
-        <div></div> <!-- spacer -->
-        <button id="btn-cancel-port" class="secondary small-btn">Cancel</button>
-        <button id="btn-apply-port" class="small-btn">Apply</button>
-      </div>
+
       <div id="port-warning" class="warning-text hidden"
         style="margin-left: 60px; margin-top: -5px; margin-bottom: 10px;">
         Warnung: Änderung erfordert neuen Browser-Aufruf!
@@ -63,19 +39,19 @@
         </datalist>
         <div></div> <!-- spacer -->
       </div>
-      <div id="browser-edit-actions" class="setting-row hidden"
-        style="grid-template-columns: 1fr auto auto; margin-top: -5px;">
-        <div></div> <!-- spacer -->
-        <button id="btn-cancel-browser" class="secondary small-btn">Cancel</button>
-        <button id="btn-apply-browser" class="small-btn">Apply</button>
-      </div>
-      <div id="browser-tip" class="tip-text" style="margin-left: 60px; margin-top: -5px; margin-bottom: 10px; font-size: 0.8em; opacity: 0.7;">
+
+      <div id="browser-tip" class="tip-text"
+        style="margin-left: 60px; margin-top: -5px; margin-bottom: 10px; font-size: 0.8em; opacity: 0.7;">
         Leer lassen für Standard-Browser.
       </div>
-      <div class="setting-row">
-        <span>Status</span>
-        <div id="status-display">Unknown</div>
-        <div></div> <!-- spacer -->
+
+      <div id="global-actions" class="setting-row hidden"
+        style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+        <div></div>
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-cancel-all" class="secondary small-btn">Abbrechen</button>
+          <button id="btn-apply-all" class="small-btn">Akzeptieren</button>
+        </div>
       </div>
     </fieldset>
 

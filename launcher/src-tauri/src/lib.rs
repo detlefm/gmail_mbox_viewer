@@ -569,10 +569,10 @@ pub fn run() {
             // Create Tray Menu
             let open_frontend_item =
                 MenuItem::with_id(app, "open_frontend", "Open Frontend", true, None::<&str>)?;
-            let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let system_item = MenuItem::with_id(app, "system", "System", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-            let menu = Menu::with_items(app, &[&open_frontend_item, &settings_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&open_frontend_item, &system_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
@@ -586,7 +586,7 @@ pub fn run() {
                         let url = format!("http://localhost:{}", port);
                         let _ = app.opener().open_url(url, browser.as_deref());
                     }
-                    "settings" => {
+                    "system" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.set_focus();

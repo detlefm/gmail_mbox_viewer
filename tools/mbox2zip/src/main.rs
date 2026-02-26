@@ -39,11 +39,12 @@ fn main() -> Result<()> {
         .progress_chars("#>-"));
 
     let pb_clone = pb.clone();
-    let progress_callback = Some(Box::new(move |total_bytes, _count| {
-        pb_clone.set_position(total_bytes);
-    }) as Box<dyn Fn(u64, u64) + Send>);
+    let progress_callback = Some(Box::new(move |bytes_read, _total_size, _count| {
+        pb_clone.set_position(bytes_read);
+    }) as Box<dyn Fn(u64, u64, u64) + Send>);
 
-    convert_mbox_to_mbxc(input_path, output_path, progress_callback)?;
+    let abort_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    convert_mbox_to_mbxc(input_path, output_path, progress_callback, abort_flag)?;
 
     pb.finish_with_message("Processing complete");
     println!("\nSuccessfully processed messages.");

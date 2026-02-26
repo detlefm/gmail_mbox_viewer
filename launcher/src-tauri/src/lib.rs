@@ -211,15 +211,19 @@ async fn convert_mbox(app: AppHandle, input: String, output: String) -> Result<(
     
     // We run the conversion in a separate thread to avoid blocking the async runtime or UI
     tokio::task::spawn_blocking(move || {
-        let progress_callback = Some(Box::new(move |bytes, count| {
-            println!("Backend: Progress {} emails, {} bytes", count, bytes);
-            let _ = app_clone.emit("conversion-progress", serde_json::json!({
+        let app_clone_2 = app_clone.clone();
+        let progress_callback = Some(Box::new(move |bytes, total_size, count| {
+            println!("Backend: Progress {} emails, {} bytes / {}", count, bytes, total_size);
+            let _ = app_clone_2.emit("conversion-progress", serde_json::json!({
                 "bytes": bytes,
+                "total_bytes": total_size,
                 "count": count
             }));
-        }) as Box<dyn Fn(u64, u64) + Send>);
+        }) as Box<dyn Fn(u64, u64, u64) + Send>);
 
-        mbox2zip::convert_mbox_to_mbxc(input_path, output_path, progress_callback)
+        let abort_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        mbox2zip::convert_mbox_to_mbxc(input_path, output_path, progress_callback, abort_flag)
+            .map(|_| ()) // map Ok(bool) to Ok(())
             .map_err(|e| e.to_string())
     }).await.map_err(|e| e.to_string())?
 }

@@ -44,9 +44,10 @@ pub struct SearchResult {
 // --- Handlers ---
 
 pub async fn get_labels(State(state): State<AppState>) -> Json<Vec<String>> {
-    let filter_labels = state.settings.filter_labels.as_ref();
+    let data = state.data.lock().unwrap();
+    let filter_labels = data.settings.filter_labels.as_ref();
 
-    let mut filtered_labels: Vec<String> = state
+    let mut filtered_labels: Vec<String> = data
         .labels
         .iter()
         .filter(|&label| {
@@ -73,9 +74,11 @@ pub async fn search_messages(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
+    let data = state.data.lock().unwrap();
+
     // In-Memory Search (Fallback)
     // Filter metadata
-    let filtered: Vec<&MetadataEntry> = state
+    let filtered: Vec<&MetadataEntry> = data
         .metadata
         .iter()
         .filter(|entry| {
@@ -86,8 +89,7 @@ pub async fn search_messages(
                 .label
                 .as_ref()
                 .map(|l| {
-                    state
-                        .settings
+                    data.settings
                         .special_labels
                         .as_ref()
                         .map(|s| s.contains(l))
@@ -97,7 +99,7 @@ pub async fn search_messages(
 
             if !searching_special {
                 if let Some(entry_labels) = &entry.gmail_labels {
-                    if let Some(special) = &state.settings.special_labels {
+                    if let Some(special) = &data.settings.special_labels {
                         if entry_labels.iter().any(|l| special.contains(l)) {
                             return false;
                         }
@@ -222,7 +224,7 @@ pub async fn search_messages(
         .collect();
 
     // Labels für die Anzeige filtern (filter_labels beachten)
-    if let Some(filters) = &state.settings.filter_labels {
+    if let Some(filters) = &data.settings.filter_labels {
         for entry in &mut paged {
             if let Some(labels) = &mut entry.gmail_labels {
                 labels.retain(|l| !filters.contains(l));
@@ -240,58 +242,56 @@ pub async fn get_message(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Use cached ZIP
-    let mut archive_guard = state
-        .zip_archive
-        .lock()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut data = state.data.lock().unwrap();
 
-    let archive = archive_guard.as_mut().ok_or(StatusCode::NOT_FOUND)?;
+    let (body, is_html, attachments) = {
+        let archive = data.zip_archive.as_mut().ok_or(StatusCode::NOT_FOUND)?;
 
-    let mut eml_file = archive.by_name(&id).map_err(|_| StatusCode::NOT_FOUND)?;
-    let mut buffer = Vec::new();
-    eml_file
-        .read_to_end(&mut buffer)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut eml_file = archive.by_name(&id).map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut buffer = Vec::new();
+        eml_file
+            .read_to_end(&mut buffer)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Parse EML
-    let message = MessageParser::default()
-        .parse(&buffer)
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        // Parse EML
+        let message = MessageParser::default()
+            .parse(&buffer)
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Extract body (HTML/Text)
-    let body = message
-        .body_html(0)
-        .map(|s| s.into_owned())
-        .or_else(|| message.body_text(0).map(|s| s.into_owned()))
-        .unwrap_or_else(|| "[Kein Inhalt]".to_string());
+        // Extract body (HTML/Text)
+        let body = message
+            .body_html(0)
+            .map(|s| s.into_owned())
+            .or_else(|| message.body_text(0).map(|s| s.into_owned()))
+            .unwrap_or_else(|| "[Kein Inhalt]".to_string());
 
-    let is_html = message.body_html(0).is_some();
+        let is_html = message.body_html(0).is_some();
 
-    // Create JSON for attachments
-    let attachments: Vec<serde_json::Value> = message
-        .attachments()
-        .map(|a| {
-            serde_json::json!({
-                "filename": a.attachment_name().unwrap_or("unnamed"),
-                "content_type": a.content_type().as_ref().map(|c| c.c_type.to_string()),
-                "content_id": a.content_id().as_ref()
+        // Create JSON for attachments
+        let attachments: Vec<serde_json::Value> = message
+            .attachments()
+            .map(|a| {
+                serde_json::json!({
+                    "filename": a.attachment_name().unwrap_or("unnamed"),
+                    "content_type": a.content_type().as_ref().map(|c| c.c_type.to_string()),
+                    "content_id": a.content_id().as_ref()
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    // Find entry in metadata for fallbacks and labels
-    let entry = state
-        .metadata_index
-        .get(&id)
-        .and_then(|&idx| state.metadata.get(idx));
+        (body, is_html, attachments)
+    };
+
+    // Release mutable borrow of data by using fields directly
+    let entry_idx = data.metadata_index.get(&id);
+    let entry = entry_idx.and_then(|&idx| data.metadata.get(idx));
 
     let mut labels = entry
         .and_then(|m| m.gmail_labels.clone())
         .unwrap_or_default();
 
     // Filter labels to hide configured ones
-    if let Some(filters) = &state.settings.filter_labels {
+    if let Some(filters) = &data.settings.filter_labels {
         labels.retain(|l| !filters.contains(l));
     }
 
@@ -317,10 +317,11 @@ pub async fn get_message(
     let date_str = entry
         .and_then(|m| m.date_sent_iso.clone())
         .unwrap_or_default();
+    let subject_str = entry.and_then(|m| m.subject.clone()).unwrap_or_default();
 
     Ok(Json(serde_json::json!({
         "id": id,
-        "subject": message.subject().map(|s| decode_header_robust(&s.to_string())),
+        "subject": decode_header_robust(&subject_str),
         "from": decode_header_robust(&from_str),
         "to": decode_header_robust(&to_str),
         "date": date_str,
@@ -336,13 +337,12 @@ pub async fn download_attachment(
     State(state): State<AppState>,
     Path((id, filename)): Path<(String, String)>,
 ) -> Response {
-    // Use cached ZIP
-    let mut archive_guard = match state.zip_archive.lock() {
-        Ok(a) => a,
+    let mut data = match state.data.lock() {
+        Ok(d) => d,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let archive = match archive_guard.as_mut() {
+    let archive = match data.zip_archive.as_mut() {
         Some(a) => a,
         None => return StatusCode::NOT_FOUND.into_response(),
     };
@@ -370,7 +370,7 @@ pub async fn download_attachment(
                 .as_ref()
                 .map(|c| c.c_type.to_string())
                 .unwrap_or_else(|| "application/octet-stream".to_string());
-            let data = attachment.contents().to_vec();
+            let att_data = attachment.contents().to_vec();
 
             return (
                 [
@@ -380,7 +380,7 @@ pub async fn download_attachment(
                         format!("attachment; filename=\"{}\"", filename),
                     ),
                 ],
-                data,
+                att_data,
             )
                 .into_response();
         }
@@ -454,12 +454,15 @@ pub fn decode_header_robust(value: &str) -> String {
 }
 
 pub async fn get_system_info(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let data = state.data.lock().unwrap();
+    let instance_id = state.instance_id.lock().unwrap();
+
     Json(serde_json::json!({
-        "instance_id": state.instance_id,
-        "zip_path": state.zip_path.to_string_lossy(),
-        "db_loaded": state.db_conn.lock().unwrap().is_some(),
-        "settings_path": state.settings.source_path.as_ref().map(|p| p.to_string_lossy()),
-        "browser": state.settings.browser,
+        "instance_id": *instance_id,
+        "zip_path": data.settings.zip_path,
+        "db_loaded": data.db_conn.is_some(),
+        "settings_path": data.settings.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+        "browser": data.settings.browser,
     }))
 }
 
@@ -493,6 +496,8 @@ pub async fn select_toml_file() -> Json<serde_json::Value> {
     }))
 }
 
+use std::sync::atomic::Ordering;
+
 #[derive(serde::Deserialize)]
 pub struct ConvertRequest {
     pub mbox_path: String,
@@ -500,16 +505,76 @@ pub struct ConvertRequest {
 }
 
 pub async fn convert_mbox(
+    State(state): State<AppState>,
     Json(req): Json<ConvertRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    {
+        let mut status = state.conversion_status.lock().unwrap();
+        if status.is_running {
+            return Err((
+                StatusCode::CONFLICT,
+                "Konvertierung läuft bereits".to_string(),
+            ));
+        }
+        status.is_running = true;
+        status.progress_percent = 0;
+        status.current_message = 0;
+        status.error = None;
+    }
+    state.conversion_abort.store(false, Ordering::SeqCst);
+
     let mbox_path = PathBuf::from(req.mbox_path);
     let mbxc_path = PathBuf::from(req.mbxc_path);
+    let state_clone = state.clone();
 
-    // Call mbox2zip logic
-    match mbox2zip::convert_mbox_to_mbxc(mbox_path, mbxc_path, None) {
-        Ok(_) => Ok(Json(serde_json::json!({ "status": "success" }))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
-    }
+    tokio::task::spawn_blocking(move || {
+        let status_arc = state_clone.conversion_status.clone();
+        let abort_arc = state_clone.conversion_abort.clone();
+
+        let callback = move |bytes_read: u64, total_bytes: u64, msg_count: u64| {
+            let mut status = status_arc.lock().unwrap();
+            status.current_message = msg_count;
+            status.total_bytes = total_bytes;
+            status.total_bytes_read = bytes_read;
+            if total_bytes > 0 {
+                status.progress_percent = (bytes_read * 100 / total_bytes) as u8;
+            }
+        };
+
+        match mbox2zip::convert_mbox_to_mbxc(
+            mbox_path,
+            mbxc_path,
+            Some(Box::new(callback)),
+            abort_arc,
+        ) {
+            Ok(finished) => {
+                let mut status = state_clone.conversion_status.lock().unwrap();
+                status.is_running = false;
+                if !finished {
+                    status.error = Some("Abgebrochen".to_string());
+                } else {
+                    status.progress_percent = 100;
+                }
+            }
+            Err(e) => {
+                let mut status = state_clone.conversion_status.lock().unwrap();
+                status.is_running = false;
+                status.error = Some(e.to_string());
+            }
+        }
+    });
+
+    Ok(Json(serde_json::json!({ "status": "started" })))
+}
+
+pub async fn get_convert_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let status = state.conversion_status.lock().unwrap();
+    Json(serde_json::json!(*status))
+}
+
+pub async fn abort_convert(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.conversion_abort.store(true, Ordering::SeqCst);
+    Json(serde_json::json!({ "status": "aborting" }))
 }
 
 #[derive(serde::Deserialize)]
@@ -522,18 +587,28 @@ pub async fn update_settings(
     State(state): State<AppState>,
     Json(req): Json<SettingsUpdateRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let settings_path = state.settings.source_path.as_ref().ok_or((
-        StatusCode::BAD_REQUEST,
-        "No settings file location found".to_string(),
-    ))?;
+    let settings_path = {
+        let data = state.data.lock().unwrap();
+        data.settings.source_path.clone().ok_or((
+            StatusCode::BAD_REQUEST,
+            "No settings file location found".to_string(),
+        ))?
+    };
 
-    // Simple TOML update or just overwrite (since we only have a few fields)
+    // Simple TOML update
     let new_content = format!("zip_path = {:?}\nbrowser = {:?}", req.zip_path, req.browser);
 
-    std::fs::write(settings_path, new_content)
+    std::fs::write(&settings_path, new_content)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(serde_json::json!({ "status": "restarting" })))
+    // Hot reload
+    match crate::load_all_data(Some(settings_path), None) {
+        Ok(raw) => {
+            state.apply_new_data(raw.settings, raw.metadata, raw.db_conn, raw.archive);
+            Ok(Json(serde_json::json!({ "status": "success" })))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -541,17 +616,18 @@ pub struct RestartRequest {
     pub settings_path: String,
 }
 
-pub async fn restart_with_settings(Json(req): Json<RestartRequest>) -> Json<serde_json::Value> {
-    // We can't easily "restart" the process from here if we're inside the same process.
-    // However, we can tell the launcher (which is monitoring the backend) or just exit and hope for the best.
-    // In this architecture, let's assume the launcher should be told.
-    // But for a simple web app, we can write a 'restart' flag file or use a command.
+pub async fn restart_with_settings(
+    State(state): State<AppState>,
+    Json(req): Json<RestartRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let next_path = PathBuf::from(req.settings_path);
 
-    // For now, let's just log it. The launcher part will be trickier if it's strictly a Tokio task.
-    // If it's a Tokio task, we return a special status and the main loop handles it.
-
-    Json(serde_json::json!({
-        "status": "switching",
-        "next_path": req.settings_path
-    }))
+    // Hot reload from new toml
+    match crate::load_all_data(Some(next_path), None) {
+        Ok(raw) => {
+            state.apply_new_data(raw.settings, raw.metadata, raw.db_conn, raw.archive);
+            Ok(Json(serde_json::json!({ "status": "success" })))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
 }

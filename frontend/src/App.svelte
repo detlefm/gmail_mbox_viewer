@@ -28,6 +28,11 @@
   let dbLoaded = false;
   let initLoading = true;
   let viewMode = "viewer"; // 'viewer' or 'management'
+  let convertStatus = {
+    is_running: false,
+    progress_percent: 0,
+    current_message: 0,
+  };
 
   $: archiveName = getArchiveName(lastZipPath);
 
@@ -56,6 +61,15 @@
       }
     } catch (e) {
       // Ignore errors (e.g. during restart)
+    }
+  }
+
+  async function checkConvertStatus() {
+    try {
+      const status = await api.getConvertStatus();
+      convertStatus = status;
+    } catch (e) {
+      // Ignore errors
     }
   }
 
@@ -349,6 +363,7 @@
     // Start polling for backend changes
     await checkServerStatus();
     setInterval(checkServerStatus, 3000);
+    setInterval(checkConvertStatus, 2000);
   });
 </script>
 
@@ -373,6 +388,24 @@
     {theme}
     {archiveName}
   />
+
+  {#if convertStatus.is_running}
+    <div class="global-progress">
+      <div class="progress-track">
+        <div
+          class="progress-bar"
+          style:width={`${convertStatus.progress_percent}%`}
+        ></div>
+      </div>
+      <div class="progress-label">
+        Konvertierung läuft: {convertStatus.progress_percent}% ({convertStatus.current_message}
+        Nachrichten)
+      </div>
+      <button class="abort-link" on:click={() => api.abortConvert()}
+        >Abbrechen</button
+      >
+    </div>
+  {/if}
 
   <div class="main-layout">
     {#if viewMode === "management"}
@@ -805,6 +838,53 @@
     border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
+  }
+
+  .global-progress {
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-strong);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 100;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    background: var(--input-bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--accent-color);
+    transition: width 0.3s ease;
+  }
+
+  .progress-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .abort-link {
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  .abort-link:hover {
+    background: #ef4444;
+    color: white;
   }
 
   /* Dynamic styles based on layout mode */

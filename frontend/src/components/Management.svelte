@@ -15,6 +15,8 @@
 
     let mboxFile = "";
     let mbxcOutput = "";
+    let convertStatus = { is_running: false, progress_percent: 0, error: null };
+    let pendingSettingsPath = "";
 
     async function loadStatus() {
         try {
@@ -29,39 +31,56 @@
         }
     }
 
+    async function checkConvertStatus() {
+        try {
+            const cs = await api.getConvertStatus();
+            convertStatus = cs;
+        } catch (e) {
+            // Ignore
+        }
+    }
+
     async function handleSelectSettingsFile() {
         try {
             const path = await api.selectSettingsFile();
             if (path) {
-                if (
-                    confirm(
-                        "Möchten Sie zu dieser Konfigurationsdatei wechseln und das Backend neu starten?",
-                    )
-                ) {
-                    status = "Wechsle Konfiguration...";
-                    await api.restartWithSettings(path);
-                    alert(
-                        "Konfiguration wird gewechselt. Bitte laden Sie die Seite in Kürze neu.",
-                    );
-                    onReload();
-                }
+                pendingSettingsPath = path;
             }
         } catch (err) {
             alert("Fehler bei Dateiauswahl: " + err.message);
         }
     }
 
-    async function selectZipFile() {
-        const path = await api.selectFile();
-        if (path) zipPath = path;
+    async function acceptSettingsChange() {
+        try {
+            status = "Wechsle Konfiguration...";
+            const res = await api.restartWithSettings(pendingSettingsPath);
+            if (res.status === "success") {
+                status = "Konfiguration erfolgreich gewechselt.";
+                pendingSettingsPath = "";
+                setTimeout(() => onReload(), 500);
+            } else {
+                alert("Fehler beim Wechseln der Konfiguration.");
+            }
+        } catch (err) {
+            alert("Fehler beim Wechseln: " + err.message);
+        }
+    }
+
+    function cancelSettingsChange() {
+        pendingSettingsPath = "";
     }
 
     async function saveSettings() {
         try {
             status = "Speichere...";
-            await api.updateSettings(zipPath, browser);
-            alert("Einstellungen gespeichert. Das Backend wird neu gestartet.");
-            onReload();
+            const res = await api.updateSettings(zipPath, browser);
+            if (res.status === "success") {
+                status = "Einstellungen gespeichert.";
+                setTimeout(() => onReload(), 500);
+            } else {
+                alert("Fehler beim Speichern der Einstellungen.");
+            }
         } catch (err) {
             alert("Fehler beim Speichern: " + err.message);
         }
@@ -83,18 +102,24 @@
             return;
         }
         try {
-            status = "Konvertierung läuft...";
             await api.convertMbox(mboxFile, mbxcOutput);
-            alert("Konvertierung abgeschlossen!");
-            status = "Bereit";
         } catch (err) {
-            alert("Fehler: " + err.message);
-            status = "Fehler bei Konvertierung";
+            alert("Fehler beim Starten: " + err.message);
         }
     }
 
-    onMount(async () => {
-        await loadStatus();
+    async function abortConversion() {
+        try {
+            await api.abortConvert();
+        } catch (err) {
+            alert("Fehler beim Abbrechen: " + err.message);
+        }
+    }
+
+    onMount(() => {
+        loadStatus();
+        const interval = setInterval(checkConvertStatus, 1000);
+        return () => clearInterval(interval);
     });
 </script>
 
@@ -148,14 +173,27 @@
                                 <input
                                     id="settings-path"
                                     type="text"
-                                    bind:value={settingsPath}
+                                    value={pendingSettingsPath || settingsPath}
                                     readonly
                                 />
-                                <button
-                                    class="secondary-btn"
-                                    on:click={handleSelectSettingsFile}
-                                    >Andere Datei wählen...</button
-                                >
+                                {#if !pendingSettingsPath}
+                                    <button
+                                        class="secondary-btn"
+                                        on:click={handleSelectSettingsFile}
+                                        >Andere Datei wählen...</button
+                                    >
+                                {:else}
+                                    <button
+                                        class="primary-btn accept-btn"
+                                        on:click={acceptSettingsChange}
+                                        >Akzeptieren</button
+                                    >
+                                    <button
+                                        class="secondary-btn cancel-btn"
+                                        on:click={cancelSettingsChange}
+                                        >Abbrechen</button
+                                    >
+                                {/if}
                             </div>
                         </div>
 
@@ -168,10 +206,6 @@
                                     bind:value={zipPath}
                                     readonly
                                 />
-                                <button
-                                    class="secondary-btn"
-                                    on:click={selectZipFile}>Wählen...</button
-                                >
                             </div>
                         </div>
 
@@ -187,7 +221,7 @@
 
                         <div class="actions">
                             <button class="primary-btn" on:click={saveSettings}
-                                >Aktuelle Einstellungen speichern & Neustart</button
+                                >Aktuelle Einstellungen speichern</button
                             >
                         </div>
                     </div>
@@ -198,7 +232,7 @@
                     <p>
                         Die Konfigurationsdatei speichert Pfade,
                         Port-Einstellungen und Darstellungsoptionen. Änderungen
-                        daran erfordern einen Neustart des Hintergrunddienstes.
+                        daran werden sofort übernommen.
                     </p>
                 </div>
             </section>
@@ -250,13 +284,48 @@
                             <button
                                 class="primary-btn"
                                 on:click={startConversion}
-                                disabled={status.includes("läuft")}
+                                disabled={convertStatus.is_running}
                             >
-                                {status.includes("läuft")
+                                {convertStatus.is_running
                                     ? "Konvertierung läuft..."
                                     : "Konvertierung starten"}
                             </button>
                         </div>
+
+                        {#if convertStatus.is_running || convertStatus.progress_percent > 0 || convertStatus.error}
+                            <div class="convert-progress-area">
+                                <div class="progress-details">
+                                    <span
+                                        >{convertStatus.progress_percent}%
+                                        abgeschlossen ({convertStatus.current_message}
+                                        Nachrichten)</span
+                                    >
+                                    {#if convertStatus.is_running}
+                                        <button
+                                            class="abort-btn"
+                                            on:click={abortConversion}
+                                            >Abbrechen</button
+                                        >
+                                    {/if}
+                                </div>
+                                <div class="progress-track">
+                                    <div
+                                        class="progress-bar"
+                                        style:width={`${convertStatus.progress_percent}%`}
+                                        class:error={convertStatus.error}
+                                    ></div>
+                                </div>
+                                {#if convertStatus.error}
+                                    <p class="error-msg">
+                                        Status: {convertStatus.error}
+                                    </p>
+                                {:else if !convertStatus.is_running && convertStatus.progress_percent === 100}
+                                    <p class="success-msg">
+                                        Konvertierung erfolgreich abgeschlossen!
+                                    </p>
+                                {/if}
+                            </div>
+                        {/if}
                     </div>
                 </div>
             </section>
@@ -465,6 +534,15 @@
         opacity: 0.9;
     }
 
+    .accept-btn {
+        background-color: #10b981;
+    }
+
+    .cancel-btn {
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+
     .primary-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -472,5 +550,69 @@
 
     .actions {
         margin-top: 1rem;
+    }
+
+    .convert-progress-area {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .progress-details {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .abort-btn {
+        background: transparent;
+        border: 1px solid #ef4444;
+        color: #ef4444;
+        padding: 4px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+
+    .abort-btn:hover {
+        background: #ef4444;
+        color: white;
+    }
+
+    .progress-track {
+        height: 12px;
+        background: var(--bg-color);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: var(--accent-color);
+        transition: width 0.3s ease;
+    }
+
+    .progress-bar.error {
+        background: #ef4444;
+    }
+
+    .error-msg {
+        color: #ef4444;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .success-msg {
+        color: #10b981;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0;
     }
 </style>

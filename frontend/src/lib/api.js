@@ -56,6 +56,18 @@ export async function convertMbox(mboxPath, mbxcPath) {
     return response.json();
 }
 
+export async function getConvertStatus() {
+    const response = await fetch(`${BASE_URL}/system/convert/status`);
+    if (!response.ok) throw new Error("Failed to get conversion status");
+    return response.json();
+}
+
+export async function abortConvert() {
+    const response = await fetch(`${BASE_URL}/system/convert/abort`, { method: "POST" });
+    if (!response.ok) throw new Error("Failed to abort conversion");
+    return response.json();
+}
+
 export async function updateSettings(zipPath, browser) {
     const response = await fetch(`${BASE_URL}/system/settings`, {
         method: "POST",

@@ -3,6 +3,7 @@ pub mod model;
 pub mod settings;
 pub mod state;
 
+use crate::model::MetadataEntry;
 use crate::settings::Settings;
 use crate::state::AppState;
 use axum::{
@@ -52,10 +53,17 @@ fn load_database_to_memory(archive: &mut ZipArchive<File>) -> Option<Connection>
     Some(mem_conn)
 }
 
-pub fn init_app_state(
+pub struct RawAppData {
+    pub settings: Settings,
+    pub metadata: Vec<MetadataEntry>,
+    pub db_conn: Option<Connection>,
+    pub archive: Option<ZipArchive<File>>,
+}
+
+pub fn load_all_data(
     settings_path: Option<PathBuf>,
     log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
-) -> Result<AppState, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<RawAppData, Box<dyn std::error::Error + Send + Sync>> {
     let log = |msg: String| {
         if let Some(tx) = &log_tx {
             let _ = tx.send(msg.clone());
@@ -70,7 +78,7 @@ pub fn init_app_state(
         eprintln!("{}", msg);
     };
 
-    log("Starte Backend ...".to_string());
+    log("Lade Konfiguration ...".to_string());
 
     // 1. Load Settings
     let settings = Settings::new(settings_path)?;
@@ -93,7 +101,12 @@ pub fn init_app_state(
     // 3. Load Metadata and DB
     if !zip_path.exists() {
         log_err(format!("Archiv nicht gefunden unter: {:?}", zip_path));
-        return Ok(AppState::new(settings, zip_path, Vec::new(), None, None));
+        return Ok(RawAppData {
+            settings,
+            metadata: Vec::new(),
+            db_conn: None,
+            archive: None,
+        });
     }
 
     let file = File::open(&zip_path)?;
@@ -120,13 +133,24 @@ pub fn init_app_state(
         log("Datenbank ist bereit.".to_string());
     }
 
-    // 4. Initialize State
-    Ok(AppState::new(
+    Ok(RawAppData {
         settings,
-        zip_path,
         metadata,
         db_conn,
-        Some(archive),
+        archive: Some(archive),
+    })
+}
+
+pub fn init_app_state(
+    settings_path: Option<PathBuf>,
+    log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
+) -> Result<AppState, Box<dyn std::error::Error + Send + Sync>> {
+    let raw = load_all_data(settings_path, log_tx)?;
+    Ok(AppState::new(
+        raw.settings,
+        raw.metadata,
+        raw.db_conn,
+        raw.archive,
     ))
 }
 
@@ -221,6 +245,8 @@ pub async fn run_server_with_state(
                 .route("/system/select-save-file", post(api::select_save_file))
                 .route("/system/select-toml", post(api::select_toml_file))
                 .route("/system/convert", post(api::convert_mbox))
+                .route("/system/convert/status", get(api::get_convert_status))
+                .route("/system/convert/abort", post(api::abort_convert))
                 .route("/system/settings", post(api::update_settings))
                 .route("/system/restart", post(api::restart_with_settings)),
         )

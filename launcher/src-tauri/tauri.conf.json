@@ -41,6 +41,9 @@
     ],
     "resources": [
       "../../frontend/dist"
-    ]
+    ],
+    "macOS": {
+      "infoPlist": "Info.plist"
+    }
   }
 }

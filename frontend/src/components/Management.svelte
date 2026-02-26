@@ -3,6 +3,7 @@
     import * as api from "../lib/api";
 
     export let onReload = () => {};
+    export let onClose = () => {};
 
     // Tabs: 'system', 'convert'
     let activeTab = "system";
@@ -17,6 +18,10 @@
     let mbxcOutput = "";
     let convertStatus = { is_running: false, progress_percent: 0, error: null };
     let pendingSettingsPath = "";
+    let pendingZipPath = "";
+    let pendingBrowser = "";
+    let isLoadingPreview = false;
+    let isRestarting = false;
 
     async function loadStatus() {
         try {
@@ -45,6 +50,20 @@
             const path = await api.selectSettingsFile();
             if (path) {
                 pendingSettingsPath = path;
+                isLoadingPreview = true;
+                status = "Prüfe Konfiguration...";
+                try {
+                    const preview = await api.inspectSettings(path);
+                    if (isLoadingPreview) {
+                        pendingZipPath = preview.zip_path;
+                        pendingBrowser = preview.browser || "";
+                        status = "Vorschau geladen.";
+                    }
+                } catch (e) {
+                    if (isLoadingPreview) status = "Vorschau fehlgeschlagen.";
+                } finally {
+                    isLoadingPreview = false;
+                }
             }
         } catch (err) {
             alert("Fehler bei Dateiauswahl: " + err.message);
@@ -52,6 +71,10 @@
     }
 
     async function acceptSettingsChange() {
+        if (isRestarting) return;
+        isRestarting = true;
+        isLoadingPreview = false; // Prevents the preview from overwriting the status
+
         try {
             status = "Wechsle Konfiguration...";
             const res = await api.restartWithSettings(pendingSettingsPath);
@@ -61,14 +84,23 @@
                 setTimeout(() => onReload(), 500);
             } else {
                 alert("Fehler beim Wechseln der Konfiguration.");
+                isRestarting = false;
             }
         } catch (err) {
             alert("Fehler beim Wechseln: " + err.message);
+            isRestarting = false;
         }
     }
 
     function cancelSettingsChange() {
-        pendingSettingsPath = "";
+        if (pendingSettingsPath) {
+            pendingSettingsPath = "";
+            pendingZipPath = "";
+            pendingBrowser = "";
+            status = "Bereit";
+        } else {
+            onClose();
+        }
     }
 
     async function saveSettings() {
@@ -88,7 +120,15 @@
 
     async function selectMbox() {
         const path = await api.selectFile();
-        if (path) mboxFile = path;
+        if (path) {
+            mboxFile = path;
+            // Auto-fill output path by replacing extension
+            if (path.toLowerCase().endsWith(".mbox")) {
+                mbxcOutput = path.slice(0, -5) + ".mbxc";
+            } else {
+                mbxcOutput = path + ".mbxc";
+            }
+        }
     }
 
     async function selectMbxcOutput() {
@@ -167,7 +207,7 @@
                     <div class="form-section">
                         <div class="row">
                             <label for="settings-path"
-                                >Aktuelle Konfigurations-Datei (.toml):</label
+                                >Konfigurations-Datei (.toml):</label
                             >
                             <div class="input-group">
                                 <input
@@ -176,24 +216,11 @@
                                     value={pendingSettingsPath || settingsPath}
                                     readonly
                                 />
-                                {#if !pendingSettingsPath}
-                                    <button
-                                        class="secondary-btn"
-                                        on:click={handleSelectSettingsFile}
-                                        >Andere Datei wählen...</button
-                                    >
-                                {:else}
-                                    <button
-                                        class="primary-btn accept-btn"
-                                        on:click={acceptSettingsChange}
-                                        >Akzeptieren</button
-                                    >
-                                    <button
-                                        class="secondary-btn cancel-btn"
-                                        on:click={cancelSettingsChange}
-                                        >Abbrechen</button
-                                    >
-                                {/if}
+                                <button
+                                    class="secondary-btn"
+                                    on:click={handleSelectSettingsFile}
+                                    >Datei wählen...</button
+                                >
                             </div>
                         </div>
 
@@ -203,7 +230,9 @@
                                 <input
                                     id="zip-path"
                                     type="text"
-                                    bind:value={zipPath}
+                                    value={pendingSettingsPath
+                                        ? pendingZipPath
+                                        : zipPath}
                                     readonly
                                 />
                             </div>
@@ -214,15 +243,29 @@
                             <input
                                 id="browser-input"
                                 type="text"
-                                bind:value={browser}
+                                value={pendingSettingsPath
+                                    ? pendingBrowser
+                                    : browser}
+                                readonly
                                 placeholder="Standard-Browser"
                             />
                         </div>
 
                         <div class="actions">
-                            <button class="primary-btn" on:click={saveSettings}
-                                >Aktuelle Einstellungen speichern</button
-                            >
+                            <div class="action-buttons">
+                                <button
+                                    class="primary-btn accept-btn"
+                                    disabled={!pendingSettingsPath ||
+                                        pendingSettingsPath === settingsPath}
+                                    on:click={acceptSettingsChange}
+                                    >Akzeptieren</button
+                                >
+                                <button
+                                    class="secondary-btn cancel-btn"
+                                    on:click={cancelSettingsChange}
+                                    >Abbrechen</button
+                                >
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -254,7 +297,6 @@
                                     id="mbox-source"
                                     type="text"
                                     bind:value={mboxFile}
-                                    readonly
                                 />
                                 <button
                                     class="secondary-btn"
@@ -270,7 +312,6 @@
                                     id="mbxc-target"
                                     type="text"
                                     bind:value={mbxcOutput}
-                                    readonly
                                 />
                                 <button
                                     class="secondary-btn"
@@ -282,9 +323,11 @@
 
                         <div class="actions">
                             <button
-                                class="primary-btn"
+                                class="primary-btn accept-btn"
                                 on:click={startConversion}
-                                disabled={convertStatus.is_running}
+                                disabled={convertStatus.is_running ||
+                                    !mboxFile ||
+                                    !mbxcOutput}
                             >
                                 {convertStatus.is_running
                                     ? "Konvertierung läuft..."
@@ -519,33 +562,41 @@
         background: var(--bg-color);
     }
 
-    .primary-btn {
-        padding: 0.85rem 1.5rem;
-        border-radius: 8px;
-        border: none;
-        background: var(--accent-color);
-        color: white;
-        font-weight: 600;
+    .primary-btn,
+    .secondary-btn {
         cursor: pointer;
-        transition: opacity 0.2s;
+        pointer-events: auto !important;
     }
 
-    .primary-btn:hover {
+    .primary-btn:hover:not(:disabled),
+    .secondary-btn:hover:not(:disabled) {
         opacity: 0.9;
+        cursor: pointer;
+    }
+
+    .primary-btn:disabled,
+    .secondary-btn:disabled {
+        cursor: not-allowed !important;
+        opacity: 0.5;
+        pointer-events: none;
     }
 
     .accept-btn {
         background-color: #10b981;
     }
 
-    .cancel-btn {
-        border-color: #ef4444;
-        color: #ef4444;
+    .accept-btn:disabled {
+        background-color: #6ee7b7;
     }
 
-    .primary-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+    .cancel-btn {
+        border-color: #ef4444 !important;
+        color: #ef4444 !important;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
     }
 
     .actions {

@@ -409,7 +409,10 @@
 
   <div class="main-layout">
     {#if viewMode === "management"}
-      <Management onReload={() => window.location.reload()} />
+      <Management
+        onReload={() => window.location.reload()}
+        onClose={() => (viewMode = "viewer")}
+      />
     {:else}
       <div class="sidebar-container">
         <Sidebar {labels} {selectedLabel} onSelect={handleLabelSelect} />

@@ -87,10 +87,20 @@ export async function selectSettingsFile() {
 
 export async function restartWithSettings(settingsPath) {
     const response = await fetch(`${BASE_URL}/system/restart`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings_path: settingsPath })
     });
-    if (!response.ok) throw new Error("Failed to restart with new settings");
+    if (!response.ok) throw new Error('Failed to restart with new settings');
+    return response.json();
+}
+
+export async function inspectSettings(settingsPath) {
+    const response = await fetch(`${BASE_URL}/system/inspect-toml`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings_path: settingsPath })
+    });
+    if (!response.ok) throw new Error('Failed to inspect settings file');
     return response.json();
 }

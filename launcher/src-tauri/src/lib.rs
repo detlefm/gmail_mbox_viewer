@@ -546,6 +546,9 @@ pub fn run() {
             cached_backend_state: Mutex::new(None),
         })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             // Load persisted settings if they exist
             if let Some((persisted_path, persisted_port, persisted_browser)) =
                 load_config(app.app_handle())
@@ -603,23 +606,21 @@ pub fn run() {
             // Attempt start
             match start_backend_server(app.handle(), &settings_path, true) {
                 Ok(_) => {
-                    // Success: Accessory mode (hidden from dock)
-                    #[cfg(target_os = "macos")]
-                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
                 }
                 Err(e) => {
                     eprintln!("Failed to start backend: {}", e);
                     *state.startup_error.lock().unwrap() = Some(e.to_string());
 
-                    // Failure: Show window AND Regular mode (visible in dock)
+                    // Failure: Show window
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
-                    #[cfg(target_os = "macos")]
-                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
                 }
             }
+
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             Ok(())
         })

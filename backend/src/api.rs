@@ -631,3 +631,25 @@ pub async fn restart_with_settings(
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     }
 }
+
+pub async fn inspect_settings(
+    Json(req): Json<RestartRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let path = PathBuf::from(&req.settings_path);
+    let settings = crate::settings::Settings::new(Some(path))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut zip_path = PathBuf::from(&settings.zip_path);
+    if zip_path.is_relative() {
+        if let Some(source_path) = &settings.source_path {
+            if let Some(parent) = source_path.parent() {
+                zip_path = parent.join(&settings.zip_path);
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "zip_path": zip_path.to_string_lossy(),
+        "browser": settings.browser,
+    })))
+}

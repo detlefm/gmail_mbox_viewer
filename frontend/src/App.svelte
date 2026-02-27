@@ -480,7 +480,11 @@
   <div class="main-layout">
     {#if viewMode === "management"}
       <Management
-        onReload={() => window.location.reload()}
+        onReload={() => {
+          viewMode = "viewer";
+          isBackendLoading = true;
+          // No full page reload needed, polling will take over
+        }}
         onClose={() => (viewMode = "viewer")}
       />
     {:else}

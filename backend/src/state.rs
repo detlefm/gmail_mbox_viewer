@@ -109,6 +109,10 @@ impl AppState {
         let mut labels: Vec<String> = label_set.into_iter().collect();
         labels.sort();
 
+        // Set loading state to true while swapping
+        self.is_loading
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
         // Swap everything under one lock
         let mut data = self.data.lock().unwrap();
         data.settings = new_settings;
@@ -124,5 +128,8 @@ impl AppState {
             .unwrap_or_default()
             .as_secs()
             .to_string();
+
+        self.is_loading
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 }

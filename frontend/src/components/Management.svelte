@@ -71,24 +71,17 @@
     }
 
     async function acceptSettingsChange() {
-        if (isRestarting) return;
+        if (isRestarting || !pendingSettingsPath) return;
         isRestarting = true;
-        isLoadingPreview = false; // Prevents the preview from overwriting the status
+        const path = pendingSettingsPath;
+
+        // Trigger immediate UI transition in App.svelte
+        onReload();
 
         try {
-            status = "Wechsle Konfiguration...";
-            const res = await api.restartWithSettings(pendingSettingsPath);
-            if (res.status === "success") {
-                status = "Konfiguration erfolgreich gewechselt.";
-                pendingSettingsPath = "";
-                setTimeout(() => onReload(), 500);
-            } else {
-                alert("Fehler beim Wechseln der Konfiguration.");
-                isRestarting = false;
-            }
+            await api.restartWithSettings(path);
         } catch (err) {
-            alert("Fehler beim Wechseln: " + err.message);
-            isRestarting = false;
+            console.error("Background error during config switch:", err);
         }
     }
 
@@ -104,17 +97,11 @@
     }
 
     async function saveSettings() {
+        onReload();
         try {
-            status = "Speichere...";
-            const res = await api.updateSettings(zipPath, browser);
-            if (res.status === "success") {
-                status = "Einstellungen gespeichert.";
-                setTimeout(() => onReload(), 500);
-            } else {
-                alert("Fehler beim Speichern der Einstellungen.");
-            }
+            await api.updateSettings(zipPath, browser);
         } catch (err) {
-            alert("Fehler beim Speichern: " + err.message);
+            console.error("Background error during save:", err);
         }
     }
 

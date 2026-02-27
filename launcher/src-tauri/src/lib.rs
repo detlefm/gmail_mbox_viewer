@@ -367,9 +367,8 @@ fn start_backend_server(
             // Update status if we see "Listening", but ONLY if we don't already have an error
             else if msg.contains("Listening on") {
                 let mut status_guard = state.status.lock().unwrap();
-                if !status_guard.starts_with("Error:") {
-                    *status_guard = "Running".to_string();
-                    let _ = app_clone.emit("backend-status", "Running");
+                *status_guard = "Running".to_string();
+                let _ = app_clone.emit("backend-status", "Running");
 
                     // Enable tray item
                     if let Some(item) = state.open_frontend_item.lock().unwrap().as_ref() {
@@ -407,7 +406,6 @@ fn start_backend_server(
                         }
                     }
                 }
-            }
             // Handle notification from backend that the settings path has changed
             else if msg.starts_with("SETTINGS_PATH:") {
                 let new_path = msg[14..].trim().to_string();

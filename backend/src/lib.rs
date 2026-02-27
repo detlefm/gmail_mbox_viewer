@@ -145,14 +145,38 @@ pub fn init_app_state(
     settings_path: Option<PathBuf>,
     log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<AppState, Box<dyn std::error::Error + Send + Sync>> {
-    let raw = load_all_data(settings_path, log_tx.clone())?;
-    Ok(AppState::new(
-        raw.settings,
-        raw.metadata,
-        raw.db_conn,
-        raw.archive,
-        log_tx,
-    ))
+    // 1. Determine settings early to have them in state immediately
+    let settings = Settings::new(settings_path.clone())?;
+
+    // 2. Create initial state with is_loading = true and otherwise empty data
+    let app_state = AppState::new(settings.clone(), Vec::new(), None, None, log_tx.clone());
+
+    // 3. Spawn background loader
+    let state_clone = app_state.clone();
+    tokio::task::spawn_blocking(move || {
+        let raw_result = load_all_data(settings_path, log_tx.clone());
+
+        match raw_result {
+            Ok(raw) => {
+                state_clone.apply_new_data(raw.settings, raw.metadata, raw.db_conn, raw.archive);
+                if let Some(tx) = &log_tx {
+                    let _ = tx.send("Background data loading completed.".to_string());
+                }
+            }
+            Err(e) => {
+                if let Some(tx) = &log_tx {
+                    let _ = tx.send(format!("ERROR: Background loading failed: {}", e));
+                }
+            }
+        }
+
+        // Mark loading as finished regardless of success/error
+        state_clone
+            .is_loading
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    });
+
+    Ok(app_state)
 }
 
 pub async fn run_server_with_state(

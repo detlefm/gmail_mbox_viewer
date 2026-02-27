@@ -24,9 +24,11 @@
   // Instance tracking for backend restarts
   let lastInstanceId = null;
   let lastZipPath = null;
-  let showReloadNotify = false;
   let dbLoaded = false;
   let initLoading = true;
+  let isBackendLoading = true;
+  let hasInitialized = false;
+  let backendLoadMsg = "Daten werden geladen...";
   let viewMode = "viewer"; // 'viewer' or 'management'
   let convertStatus = {
     is_running: false,
@@ -41,21 +43,52 @@
     const parts = path.split(/[/\\]/);
     return parts[parts.length - 1] || "Keine Datenquelle";
   }
-
   async function checkServerStatus() {
     try {
       const info = await api.getSystemInfo();
-      if (lastInstanceId && info.instance_id !== lastInstanceId) {
-        showReloadNotify = true;
+      const backendReady = !info.is_loading;
+
+      // If instance ID changed while ready, trigger a full data refresh
+      // This replaces the old yellow banner.
+      if (
+        hasInitialized &&
+        !isBackendLoading &&
+        lastInstanceId &&
+        info.instance_id !== lastInstanceId
+      ) {
+        console.log("Backend instance changed, refreshing data...");
+        loadLabels().then(() => {
+          handleAutoDetectLabel();
+        });
       }
+
+      const prevLoading = isBackendLoading;
       lastInstanceId = info.instance_id;
       lastZipPath = info.zip_path;
       dbLoaded = info.db_loaded;
+      isBackendLoading = !backendReady;
+
+      // Update initialization state
+      if (backendReady && !hasInitialized) {
+        hasInitialized = true;
+      }
+
+      // Detect transition from loading to ready
+      if (prevLoading && backendReady) {
+        // Successful transition: wait a tiny bit to ensure backend is fully ready
+        setTimeout(async () => {
+          await loadLabels();
+          if (!selectedLabel || selectedLabel === "INBOX") {
+            handleAutoDetectLabel();
+          } else {
+            await loadMessages({ label: selectedLabel });
+          }
+        }, 100);
+      }
 
       if (initLoading) {
         initLoading = false;
-        // If nothing is loaded on first check, suggest management
-        if (!dbLoaded) {
+        if (!dbLoaded && backendReady) {
           viewMode = "management";
         }
       }
@@ -144,16 +177,27 @@
     return window.innerWidth < 768 ? 15 : 50;
   }
 
-  async function loadLabels() {
+  async function loadLabels(retryOn503 = true) {
     try {
       labels = await api.getLabels();
+      error = null;
     } catch (e) {
-      console.error(e);
-      error = "Failed to load labels";
+      if (
+        (retryOn503 && e.message.includes("503")) ||
+        e.message.toLowerCase().includes("service unavailable")
+      ) {
+        // Retry once after 500ms
+        setTimeout(() => loadLabels(false), 500);
+        return;
+      }
+      if (!isBackendLoading) {
+        console.error(e);
+        error = "Failed to load labels";
+      }
     }
   }
 
-  async function loadMessages(query = {}, resetPage = true) {
+  async function loadMessages(query = {}, resetPage = true, retryOn503 = true) {
     loading = true;
     error = null;
     try {
@@ -168,9 +212,21 @@
       });
       messages = res.messages;
       totalMessages = res.total;
+      error = null;
     } catch (e) {
-      console.error(e);
-      error = "Failed to load messages";
+      if (
+        retryOn503 &&
+        (e.message.includes("503") ||
+          e.message.toLowerCase().includes("service unavailable"))
+      ) {
+        // Retry once after 500ms
+        setTimeout(() => loadMessages(query, resetPage, false), 500);
+        return;
+      }
+      if (!isBackendLoading) {
+        console.error(e);
+        error = "Failed to load messages";
+      }
     } finally {
       loading = false;
     }
@@ -328,10 +384,7 @@
     return aVal.localeCompare(bVal);
   }
 
-  onMount(async () => {
-    applyTheme();
-    await loadLabels();
-
+  function handleAutoDetectLabel() {
     const standardLabelNames = [
       "Posteingang",
       "Zurückgestellt",
@@ -358,26 +411,43 @@
     }
 
     selectedLabel = initialLabel;
-    await loadMessages({ label: initialLabel });
+    loadMessages({ label: initialLabel });
+  }
+
+  onMount(async () => {
+    applyTheme();
+
+    // Initial status check - this will set isBackendLoading correctly
+    await checkServerStatus();
+
+    // If already finished loading, do initial data fetch
+    if (!isBackendLoading) {
+      await loadLabels();
+      handleAutoDetectLabel();
+    }
 
     // Start polling for backend changes
-    await checkServerStatus();
-    setInterval(checkServerStatus, 3000);
+    setInterval(checkServerStatus, 2000);
     setInterval(checkConvertStatus, 2000);
   });
+
+  $: {
+    // If backend is loading, we could increase polling frequency here
+    // but the 2s interval above is generally sufficient.
+  }
 </script>
 
 <div class="app-container">
-  {#if showReloadNotify}
-    <div class="reload-notify">
-      <div class="notify-content">
-        <span>Die Datenbasis wurde geändert.</span>
-        <button class="reload-btn" on:click={() => window.location.reload()}>
-          Jetzt aktualisieren
-        </button>
+  {#if isBackendLoading}
+    <div class="backend-load-overlay">
+      <div class="loader-content">
+        <div class="spinner"></div>
+        <h2>{backendLoadMsg}</h2>
+        <p>Dies kann bei großen Archiven einen Moment dauern.</p>
       </div>
     </div>
   {/if}
+
   <Header
     onSearch={handleSimpleSearch}
     onOpenAdvanced={() => (showSearchPopup = true)}
@@ -581,39 +651,6 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden;
-  }
-
-  .reload-notify {
-    background: #fef08a; /* Amber-100 */
-    border-bottom: 1px solid #facc15;
-    padding: 8px 16px;
-    z-index: 1000;
-  }
-
-  .notify-content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 16px;
-    font-size: 0.9rem;
-    color: #854d0e;
-    font-weight: 500;
-  }
-
-  .reload-btn {
-    background: #ca8a04;
-    color: white;
-    border: none;
-    padding: 4px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  .reload-btn:hover {
-    background: #a16207;
   }
 
   .main-layout {
@@ -912,6 +949,52 @@
     .detail-panel {
       width: 100% !important;
       height: auto !important;
+    }
+  }
+  .backend-load-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(var(--bg-color-rgb, 255, 255, 255), 0.9);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    color: var(--text-primary);
+  }
+
+  .loader-content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--border-strong);
+    border-top: 4px solid var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .backend-load-overlay {
+      background: rgba(0, 0, 0, 0.85);
     }
   }
 </style>

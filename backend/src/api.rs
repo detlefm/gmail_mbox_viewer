@@ -43,7 +43,10 @@ pub struct SearchResult {
 
 // --- Handlers ---
 
-pub async fn get_labels(State(state): State<AppState>) -> Json<Vec<String>> {
+pub async fn get_labels(State(state): State<AppState>) -> impl IntoResponse {
+    if state.is_loading.load(Ordering::SeqCst) {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     let data = state.data.lock().unwrap();
     let filter_labels = data.settings.filter_labels.as_ref();
 
@@ -64,13 +67,16 @@ pub async fn get_labels(State(state): State<AppState>) -> Json<Vec<String>> {
         filtered_labels.insert(0, "Alle Mails".to_string());
     }
 
-    Json(filtered_labels)
+    Json(filtered_labels).into_response()
 }
 
 pub async fn search_messages(
     State(state): State<AppState>,
     Json(query): Json<SearchQuery>,
-) -> Json<SearchResult> {
+) -> impl IntoResponse {
+    if state.is_loading.load(Ordering::SeqCst) {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
@@ -236,12 +242,16 @@ pub async fn search_messages(
         total,
         messages: paged,
     })
+    .into_response()
 }
 
 pub async fn get_message(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+) -> Result<Response, StatusCode> {
+    if state.is_loading.load(Ordering::SeqCst) {
+        return Ok(StatusCode::SERVICE_UNAVAILABLE.into_response());
+    }
     let mut data = state.data.lock().unwrap();
 
     let (body, is_html, attachments) = {
@@ -330,13 +340,17 @@ pub async fn get_message(
         "attachments": attachments,
         "labels": labels,
         "gmail_labels": labels
-    })))
+    }))
+    .into_response())
 }
 
 pub async fn download_attachment(
     State(state): State<AppState>,
     Path((id, filename)): Path<(String, String)>,
 ) -> Response {
+    if state.is_loading.load(Ordering::SeqCst) {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     let mut data = match state.data.lock() {
         Ok(d) => d,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -461,6 +475,7 @@ pub async fn get_system_info(State(state): State<AppState>) -> Json<serde_json::
         "instance_id": *instance_id,
         "zip_path": data.settings.zip_path,
         "db_loaded": data.db_conn.is_some(),
+        "is_loading": state.is_loading.load(Ordering::SeqCst),
         "settings_path": data.settings.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
         "browser": data.settings.browser,
     }))

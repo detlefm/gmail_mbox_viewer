@@ -34,6 +34,7 @@ pub struct AppState {
     pub instance_id: Arc<Mutex<String>>,
     pub conversion_status: Arc<Mutex<ConversionStatus>>,
     pub conversion_abort: Arc<AtomicBool>,
+    pub is_loading: Arc<AtomicBool>,
     pub log_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>>,
 }
 
@@ -80,6 +81,7 @@ impl AppState {
             instance_id: Arc::new(Mutex::new(instance_id)),
             conversion_status: Arc::new(Mutex::new(ConversionStatus::default())),
             conversion_abort: Arc::new(AtomicBool::new(false)),
+            is_loading: Arc::new(AtomicBool::new(true)),
             log_tx: Arc::new(Mutex::new(log_tx)),
         }
     }

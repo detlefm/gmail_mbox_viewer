@@ -6,7 +6,7 @@ use tauri::path::BaseDirectory;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, State,
+    AppHandle, Emitter, Manager, State, Wry,
 };
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -40,6 +40,7 @@ struct AppState {
     status: Mutex<String>,
     messages: Mutex<VecDeque<String>>,
     cached_backend_state: Mutex<Option<(Arc<backend::state::AppState>, String)>>,
+    open_frontend_item: Mutex<Option<MenuItem<Wry>>>,
 }
 
 fn save_config(app: &AppHandle, path: &str, port: u16, browser: Option<String>) {
@@ -370,6 +371,12 @@ fn start_backend_server(
                     *status_guard = "Running".to_string();
                     let _ = app_clone.emit("backend-status", "Running");
 
+                    // Enable tray item
+                    if let Some(item) = state.open_frontend_item.lock().unwrap().as_ref() {
+                        let _ = item.set_text("Open Frontend");
+                        let _ = item.set_enabled(true);
+                    }
+
                     // Extract port from "Listening on 127.0.0.1:54321"
                     if let Some(pos) = msg.rfind(':') {
                         if let Ok(p) = msg[pos + 1..].parse::<u16>() {
@@ -567,16 +574,18 @@ pub fn run() {
             status: Mutex::new(String::from("Stopped")),
             messages: Mutex::new(VecDeque::new()),
             cached_backend_state: Mutex::new(None),
+            open_frontend_item: Mutex::new(None),
         })
         .setup(|app| {
             #[cfg(target_os = "macos")]
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            let state = app.state::<AppState>();
+
             // Load persisted settings if they exist
             if let Some((persisted_path, persisted_port, persisted_browser)) =
                 load_config(app.app_handle())
             {
-                let state = app.state::<AppState>();
                 *state.current_settings_path.lock().unwrap() = persisted_path;
                 *state.port.lock().unwrap() = persisted_port;
                 *state.browser.lock().unwrap() = persisted_browser;
@@ -591,7 +600,8 @@ pub fn run() {
 
             // Create Tray Menu
             let open_frontend_item =
-                MenuItem::with_id(app, "open_frontend", "Open Frontend", true, None::<&str>)?;
+                MenuItem::with_id(app, "open_frontend", "Startet...", false, None::<&str>)?;
+            *state.open_frontend_item.lock().unwrap() = Some(open_frontend_item.clone());
             let system_item = MenuItem::with_id(app, "system", "System", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 

@@ -85,6 +85,23 @@ export async function selectSettingsFile() {
     return data.path;
 }
 
+export async function selectSaveToml() {
+    const response = await fetch(`${BASE_URL}/system/select-toml-save`, { method: "POST" });
+    if (!response.ok) throw new Error("Failed to select save location for settings");
+    const data = await response.json();
+    return data.path;
+}
+
+export async function createSettings(params) {
+    const response = await fetch(`${BASE_URL}/system/create-settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params)
+    });
+    if (!response.ok) throw new Error("Failed to create settings");
+    return response.json();
+}
+
 export async function restartWithSettings(settingsPath) {
     const response = await fetch(`${BASE_URL}/system/restart`, {
         method: 'POST',

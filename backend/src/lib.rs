@@ -269,6 +269,8 @@ pub async fn run_server_with_state(
                 .route("/system/select-file", post(api::select_file))
                 .route("/system/select-save-file", post(api::select_save_file))
                 .route("/system/select-toml", post(api::select_toml_file))
+                .route("/system/select-toml-save", post(api::select_toml_save_file))
+                .route("/system/create-settings", post(api::create_settings))
                 .route("/system/inspect-toml", post(api::inspect_settings))
                 .route("/system/convert", post(api::convert_mbox))
                 .route("/system/convert/status", get(api::get_convert_status))

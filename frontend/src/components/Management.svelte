@@ -23,6 +23,13 @@
     let isLoadingPreview = false;
     let isRestarting = false;
 
+    // Neue Konfiguration
+    let newTomlPath = "";
+    let newZipPath = "";
+    let filterLabelsInput =
+        "Markiert, Chat, Spam, Abrechnungen nach Kategorie, Wichtig, Geöffnet, Ungelesen, Archiviert";
+    let specialLabelsInput = "Spam, Papierkorb, Gesendet";
+
     async function loadStatus() {
         try {
             const info = await api.getSystemInfo();
@@ -143,6 +150,57 @@
         }
     }
 
+    async function handleSelectNewToml() {
+        try {
+            const path = await api.selectSaveToml();
+            if (path) newTomlPath = path;
+        } catch (err) {
+            alert("Fehler bei Dateiauswahl: " + err.message);
+        }
+    }
+
+    async function handleSelectNewMbxc() {
+        try {
+            const path = await api.selectFile();
+            if (path) newZipPath = path;
+        } catch (err) {
+            alert("Fehler bei Dateiauswahl: " + err.message);
+        }
+    }
+
+    async function handleCreateConfig() {
+        if (!newTomlPath || !newZipPath) {
+            alert(
+                "Bitte wählen Sie sowohl einen TOML-Pfad als auch eine MBXC-Datei aus.",
+            );
+            return;
+        }
+
+        const filter_labels = filterLabelsInput
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s !== "");
+        const special_labels = specialLabelsInput
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s !== "");
+
+        onReload(); // Sofort zum Loader wechseln
+
+        try {
+            await api.createSettings({
+                toml_path: newTomlPath,
+                zip_path: newZipPath,
+                filter_labels,
+                special_labels,
+            });
+        } catch (err) {
+            console.error("Fehler beim Erstellen der Konfiguration:", err);
+            // Da wir onReload() gerufen haben, ist die UI theoretisch weg,
+            // aber ein Fehler-Log ist für Debugging gut.
+        }
+    }
+
     onMount(() => {
         loadStatus();
         const interval = setInterval(checkConvertStatus, 1000);
@@ -169,6 +227,13 @@
                 on:click={() => (activeTab = "convert")}
             >
                 <span class="icon">📦</span> Konvertieren
+            </button>
+            <button
+                class="nav-item"
+                class:active={activeTab === "new_config"}
+                on:click={() => (activeTab = "new_config")}
+            >
+                <span class="icon">➕</span> Neue Konfiguration
             </button>
         </nav>
         <div class="sidebar-footer">
@@ -343,6 +408,91 @@
                                 {/if}
                             </div>
                         {/if}
+                    </div>
+                </div>
+            </section>
+        {:else if activeTab === "new_config"}
+            <section class="tab-content">
+                <div class="card">
+                    <h2>Neue Konfiguration erstellen</h2>
+                    <p class="hint">
+                        Erstellen Sie eine neue .toml Datei, um eine
+                        MBXC-Datenquelle mit individuellen Filtern zu
+                        verknüpfen.
+                    </p>
+
+                    <div class="form-section">
+                        <div class="row">
+                            <label for="new-toml-path">TOML Dateipfad:</label>
+                            <div class="input-group">
+                                <input
+                                    id="new-toml-path"
+                                    type="text"
+                                    bind:value={newTomlPath}
+                                    placeholder="Wo soll die .toml gespeichert werden?"
+                                />
+                                <button
+                                    class="secondary-btn"
+                                    on:click={handleSelectNewToml}
+                                    >Wählen...</button
+                                >
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <label for="new-zip-path">MBXC Datenquelle:</label>
+                            <div class="input-group">
+                                <input
+                                    id="new-zip-path"
+                                    type="text"
+                                    bind:value={newZipPath}
+                                    placeholder="Pfad zur .mbxc Datei"
+                                />
+                                <button
+                                    class="secondary-btn"
+                                    on:click={handleSelectNewMbxc}
+                                    >Wählen...</button
+                                >
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <label for="filter-labels"
+                                >Filter Labels (versteckt):</label
+                            >
+                            <p class="hint">
+                                Mails mit diesen Labels werden in der Liste
+                                ausgeblendet (kommagetrennt).
+                            </p>
+                            <textarea
+                                id="filter-labels"
+                                bind:value={filterLabelsInput}
+                                rows="3"
+                            ></textarea>
+                        </div>
+
+                        <div class="row">
+                            <label for="special-labels"
+                                >Special Labels (Papierkorb/Spam):</label
+                            >
+                            <p class="hint">
+                                Diese Labels werden nur angezeigt, wenn sie
+                                explizit ausgewählt sind (kommagetrennt).
+                            </p>
+                            <textarea
+                                id="special-labels"
+                                bind:value={specialLabelsInput}
+                                rows="2"
+                            ></textarea>
+                        </div>
+
+                        <div class="actions">
+                            <button
+                                class="primary-btn"
+                                on:click={handleCreateConfig}
+                                >Konfiguration erstellen & Laden</button
+                            >
+                        </div>
                     </div>
                 </div>
             </section>

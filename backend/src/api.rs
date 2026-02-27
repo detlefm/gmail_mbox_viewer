@@ -511,6 +511,16 @@ pub async fn select_toml_file() -> Json<serde_json::Value> {
     }))
 }
 
+pub async fn select_toml_save_file() -> Json<serde_json::Value> {
+    let file = FileDialog::new()
+        .add_filter("Settings", &["toml"])
+        .save_file();
+
+    Json(serde_json::json!({
+        "path": file.map(|p| p.to_string_lossy().to_string())
+    }))
+}
+
 use std::sync::atomic::Ordering;
 
 #[derive(serde::Deserialize)]
@@ -602,18 +612,24 @@ pub async fn update_settings(
     State(state): State<AppState>,
     Json(req): Json<SettingsUpdateRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let settings_path = {
+    let mut settings = {
         let data = state.data.lock().unwrap();
-        data.settings.source_path.clone().ok_or((
-            StatusCode::BAD_REQUEST,
-            "No settings file location found".to_string(),
-        ))?
+        data.settings.clone()
     };
 
-    // Simple TOML update
-    let new_content = format!("zip_path = {:?}\nbrowser = {:?}", req.zip_path, req.browser);
+    let settings_path = settings.source_path.clone().ok_or((
+        StatusCode::BAD_REQUEST,
+        "No settings file location found".to_string(),
+    ))?;
 
-    std::fs::write(&settings_path, new_content)
+    // Update values
+    settings.zip_path = req.zip_path;
+    settings.browser = req.browser;
+
+    let toml_string = toml::to_string_pretty(&settings)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    std::fs::write(&settings_path, toml_string)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Hot reload
@@ -680,4 +696,40 @@ pub async fn inspect_settings(
         "zip_path": zip_path.to_string_lossy(),
         "browser": settings.browser,
     })))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateSettingsRequest {
+    pub toml_path: String,
+    pub zip_path: String,
+    pub filter_labels: Vec<String>,
+    pub special_labels: Vec<String>,
+}
+
+pub async fn create_settings(
+    State(state): State<AppState>,
+    Json(req): Json<CreateSettingsRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let settings = crate::settings::Settings {
+        zip_path: req.zip_path,
+        filter_labels: Some(req.filter_labels),
+        special_labels: Some(req.special_labels),
+        browser: None,
+        source_path: Some(PathBuf::from(&req.toml_path)),
+    };
+
+    let toml_string = toml::to_string_pretty(&settings)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    std::fs::write(&req.toml_path, toml_string)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Now restart the app with these new settings
+    restart_with_settings(
+        State(state),
+        Json(RestartRequest {
+            settings_path: req.toml_path,
+        }),
+    )
+    .await
 }

@@ -1,8 +1,8 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Settings {
     pub zip_path: String,
     pub filter_labels: Option<Vec<String>>,
@@ -23,7 +23,9 @@ impl Settings {
         if let Some(mut path) = custom_path {
             // Expand ~ if present
             if path.starts_with("~") {
-                if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+                if let Some(home) =
+                    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+                {
                     let path_str = path.to_string_lossy();
                     let expanded = path_str.replacen("~", &home.to_string_lossy(), 1);
                     path = std::path::PathBuf::from(expanded);
@@ -56,13 +58,20 @@ impl Settings {
             #[cfg(target_os = "windows")]
             {
                 if let Ok(appdata) = std::env::var("APPDATA") {
-                    app_data_path = Some(Path::new(&appdata).join("eml_viewer").join("settings.toml"));
+                    app_data_path =
+                        Some(Path::new(&appdata).join("eml_viewer").join("settings.toml"));
                 }
             }
             #[cfg(target_os = "macos")]
             {
                 if let Ok(home) = std::env::var("HOME") {
-                    app_data_path = Some(Path::new(&home).join("Library").join("Application Support").join("eml_viewer").join("settings.toml"));
+                    app_data_path = Some(
+                        Path::new(&home)
+                            .join("Library")
+                            .join("Application Support")
+                            .join("eml_viewer")
+                            .join("settings.toml"),
+                    );
                 }
             }
 

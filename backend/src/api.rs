@@ -1,10 +1,11 @@
 use crate::model::MetadataEntry;
 use crate::state::AppState;
 use axum::{
-    extract::{Path, State},
+    extract::{Path as AxumPath, State, Query},
     http::{header, StatusCode},
     response::{IntoResponse, Json, Response},
-};
+} ;
+use std::sync::atomic::Ordering;
 use base64::Engine;
 use mail_parser::{MessageParser, MimeHeaders};
 use once_cell::sync::Lazy;
@@ -12,7 +13,8 @@ use regex::Regex;
 use rfd::FileDialog;
 use serde::Deserialize;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::fs;
 
 static RE_RFC2047: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)=\?([^?]+)\?([QB])\?([^?]*)\?=").unwrap());
@@ -247,7 +249,7 @@ pub async fn search_messages(
 
 pub async fn get_message(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    AxumPath(id): AxumPath<String>,
 ) -> Result<Response, StatusCode> {
     if state.is_loading.load(Ordering::SeqCst) {
         return Ok(StatusCode::SERVICE_UNAVAILABLE.into_response());
@@ -346,7 +348,7 @@ pub async fn get_message(
 
 pub async fn download_attachment(
     State(state): State<AppState>,
-    Path((id, filename)): Path<(String, String)>,
+    AxumPath((id, filename)): AxumPath<(String, String)>,
 ) -> Response {
     if state.is_loading.load(Ordering::SeqCst) {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
@@ -478,13 +480,18 @@ pub async fn get_system_info(State(state): State<AppState>) -> Json<serde_json::
         "is_loading": state.is_loading.load(Ordering::SeqCst),
         "settings_path": data.settings.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
         "browser": data.settings.browser,
+        "os": std::env::consts::OS,
     }))
 }
 
 pub async fn select_file() -> Json<serde_json::Value> {
-    let file = FileDialog::new()
-        .add_filter("MBOX or MBXC", &["mbox", "mbxc"])
-        .pick_file();
+    let file = tokio::task::spawn_blocking(|| {
+        FileDialog::new()
+            .add_filter("MBOX or MBXC", &["mbox", "mbxc"])
+            .pick_file()
+    })
+    .await
+    .unwrap_or(None);
 
     Json(serde_json::json!({
         "path": file.map(|p| p.to_string_lossy().to_string())
@@ -492,9 +499,13 @@ pub async fn select_file() -> Json<serde_json::Value> {
 }
 
 pub async fn select_save_file() -> Json<serde_json::Value> {
-    let file = FileDialog::new()
-        .add_filter("MBXC Archive", &["mbxc"])
-        .save_file();
+    let file = tokio::task::spawn_blocking(|| {
+        FileDialog::new()
+            .add_filter("MBXC Archive", &["mbxc"])
+            .save_file()
+    })
+    .await
+    .unwrap_or(None);
 
     Json(serde_json::json!({
         "path": file.map(|p| p.to_string_lossy().to_string())
@@ -502,9 +513,13 @@ pub async fn select_save_file() -> Json<serde_json::Value> {
 }
 
 pub async fn select_toml_file() -> Json<serde_json::Value> {
-    let file = FileDialog::new()
-        .add_filter("Settings", &["toml"])
-        .pick_file();
+    let file = tokio::task::spawn_blocking(|| {
+        FileDialog::new()
+            .add_filter("Settings", &["toml"])
+            .pick_file()
+    })
+    .await
+    .unwrap_or(None);
 
     Json(serde_json::json!({
         "path": file.map(|p| p.to_string_lossy().to_string())
@@ -512,16 +527,153 @@ pub async fn select_toml_file() -> Json<serde_json::Value> {
 }
 
 pub async fn select_toml_save_file() -> Json<serde_json::Value> {
-    let file = FileDialog::new()
-        .add_filter("Settings", &["toml"])
-        .save_file();
+    let file = tokio::task::spawn_blocking(|| {
+        FileDialog::new()
+            .add_filter("Settings", &["toml"])
+            .save_file()
+    })
+    .await
+    .unwrap_or(None);
 
     Json(serde_json::json!({
         "path": file.map(|p| p.to_string_lossy().to_string())
     }))
 }
 
-use std::sync::atomic::Ordering;
+// --- Custom Svelte File Explorer API ---
+
+#[derive(serde::Serialize)]
+pub struct FsEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct ListDirQuery {
+    pub path: String,
+    pub show_files: Option<bool>,
+    pub filter: Option<String>, // comma separated extensions like "mbox,mbxc"
+}
+
+pub async fn list_drives() -> Json<Vec<FsEntry>> {
+    tokio::task::spawn_blocking(|| {
+        let mut drives = Vec::new();
+        #[cfg(windows)]
+        {
+            for drive_letter in b'A'..=b'Z' {
+                let drive_path = format!("{}:\\", drive_letter as char);
+                if Path::new(&drive_path).exists() {
+                    drives.push(FsEntry {
+                        name: drive_path.clone(),
+                        path: drive_path,
+                        is_dir: true,
+                        size: None,
+                    });
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            drives.push(FsEntry {
+                name: "/".to_string(),
+                path: "/".to_string(),
+                is_dir: true,
+                size: None,
+            });
+        }
+        Json(drives)
+    })
+    .await
+    .unwrap_or(Json(Vec::new()))
+}
+
+pub async fn list_dir(
+    Query(query): Query<ListDirQuery>,
+) -> Result<Json<Vec<FsEntry>>, (StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&query.path);
+        if !path.exists() {
+            return Err((StatusCode::NOT_FOUND, "Path does not exist".to_string()));
+        }
+
+        let mut entries = Vec::new();
+        let read_dir = match fs::read_dir(path) {
+            Ok(rd) => rd,
+            Err(e) => return Err((StatusCode::FORBIDDEN, e.to_string())),
+        };
+
+        let filters: Vec<String> = query
+            .filter
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_lowercase())
+            .collect();
+
+        for entry_res in read_dir {
+            let entry = match entry_res {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+
+            let is_dir = metadata.is_dir();
+            let name = entry.file_name().to_string_lossy().to_string();
+            
+            // Hidden file skip (rough)
+            if name.starts_with('.') && name.len() > 1 && !is_dir {
+                continue;
+            }
+
+            if is_dir {
+                entries.push(FsEntry {
+                    name,
+                    path: entry.path().to_string_lossy().to_string(),
+                    is_dir: true,
+                    size: None,
+                });
+            } else if query.show_files.unwrap_or(true) {
+                let ext = entry
+                    .path()
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                if filters.is_empty() || filters.contains(&ext) {
+                    entries.push(FsEntry {
+                        name,
+                        path: entry.path().to_string_lossy().to_string(),
+                        is_dir: false,
+                        size: Some(metadata.len()),
+                    });
+                }
+            }
+        }
+
+        // Sort: Dirs first, then name
+        entries.sort_by(|a, b| {
+            if a.is_dir != b.is_dir {
+                b.is_dir.cmp(&a.is_dir)
+            } else {
+                a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            }
+        });
+
+        Ok(Json(entries))
+    })
+    .await
+    .unwrap_or(Err((StatusCode::INTERNAL_SERVER_ERROR, "Panic in spawn_blocking".to_string())))
+}
+
+
 
 #[derive(serde::Deserialize)]
 pub struct ConvertRequest {

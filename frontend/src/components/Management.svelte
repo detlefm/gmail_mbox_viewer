@@ -1,6 +1,7 @@
 <script>
     import { onMount } from "svelte";
     import * as api from "../lib/api";
+    import FileSystemPicker from "./FileSystemPicker.svelte";
 
     export let onReload = () => {};
     export let onClose = () => {};
@@ -13,6 +14,7 @@
     let zipPath = "";
     let browser = "";
     let dbLoaded = false;
+    let os = "windows"; // Default to windows for safety
 
     let mboxFile = "";
     let mbxcOutput = "";
@@ -30,6 +32,46 @@
         "Markiert, Chat, Spam, Abrechnungen nach Kategorie, Wichtig, Geöffnet, Ungelesen, Archiviert";
     let specialLabelsInput = "Spam, Papierkorb, Gesendet";
 
+    // Custom Picker State
+    let showPicker = false;
+    let pickerTitle = "Datei auswählen";
+    let pickerFilter = "";
+    let pickerMode = "file";
+    let pickerInitialFilename = "";
+    let pickerCallback = null;
+
+    function openPicker(title, filter, mode, callback, initialFilename = "") {
+        pickerTitle = title;
+        pickerFilter = filter;
+        pickerMode = mode;
+        pickerCallback = callback;
+        pickerInitialFilename = initialFilename;
+        showPicker = true;
+    }
+
+    function handlePickerSelect(event) {
+        const path = event.detail;
+        if (pickerCallback) pickerCallback(path);
+        showPicker = false;
+    }
+
+    async function smartPick(options) {
+        const { title, filter, mode, callback, initialFilename, apiCall } =
+            options;
+
+        if (os === "windows") {
+            openPicker(title, filter, mode, callback, initialFilename);
+        } else {
+            // Use native dialog for macOS/Linux
+            try {
+                const path = await apiCall();
+                if (path) callback(path);
+            } catch (err) {
+                alert("Fehler bei Dateiauswahl: " + err.message);
+            }
+        }
+    }
+
     async function loadStatus() {
         try {
             const info = await api.getSystemInfo();
@@ -37,6 +79,7 @@
             zipPath = info.zip_path || "";
             browser = info.browser || "";
             dbLoaded = info.db_loaded;
+            os = info.os || "windows";
             status = "Bereit";
         } catch (err) {
             status = "Fehler: " + err.message;
@@ -53,9 +96,12 @@
     }
 
     async function handleSelectSettingsFile() {
-        try {
-            const path = await api.selectSettingsFile();
-            if (path) {
+        smartPick({
+            title: "Konfiguration (.toml) wählen",
+            filter: "toml",
+            mode: "file",
+            apiCall: api.selectSettingsFile,
+            callback: async (path) => {
                 pendingSettingsPath = path;
                 isLoadingPreview = true;
                 status = "Prüfe Konfiguration...";
@@ -71,10 +117,8 @@
                 } finally {
                     isLoadingPreview = false;
                 }
-            }
-        } catch (err) {
-            alert("Fehler bei Dateiauswahl: " + err.message);
-        }
+            },
+        });
     }
 
     async function acceptSettingsChange() {
@@ -113,21 +157,41 @@
     }
 
     async function selectMbox() {
-        const path = await api.selectFile();
-        if (path) {
-            mboxFile = path;
-            // Auto-fill output path by replacing extension
-            if (path.toLowerCase().endsWith(".mbox")) {
-                mbxcOutput = path.slice(0, -5) + ".mbxc";
-            } else {
-                mbxcOutput = path + ".mbxc";
-            }
-        }
+        smartPick({
+            title: "MBOX Datei wählen",
+            filter: "mbox",
+            mode: "file",
+            apiCall: api.selectFile,
+            callback: (path) => {
+                mboxFile = path;
+                if (path.toLowerCase().endsWith(".mbox")) {
+                    mbxcOutput = path.slice(0, -5) + ".mbxc";
+                } else {
+                    mbxcOutput = path + ".mbxc";
+                }
+            },
+        });
     }
 
     async function selectMbxcOutput() {
-        const path = await api.selectSaveFile();
-        if (path) mbxcOutput = path;
+        let name = "archive.mbxc";
+        if (mboxFile) {
+            const parts = mboxFile.split(/[/\\]/);
+            const mboxName = parts[parts.length - 1];
+            if (mboxName.toLowerCase().endsWith(".mbox")) {
+                name = mboxName.slice(0, -5) + ".mbxc";
+            }
+        }
+        smartPick({
+            title: "Speicherziel Auswahl",
+            filter: "mbxc",
+            mode: "save",
+            initialFilename: name,
+            apiCall: api.selectSaveFile,
+            callback: (path) => {
+                if (path) mbxcOutput = path;
+            },
+        });
     }
 
     async function startConversion() {
@@ -151,21 +215,30 @@
     }
 
     async function handleSelectNewToml() {
-        try {
-            const path = await api.selectSaveToml();
-            if (path) newTomlPath = path;
-        } catch (err) {
-            alert("Fehler bei Dateiauswahl: " + err.message);
-        }
+        smartPick({
+            title: "Pfad für neue TOML wählen",
+            filter: "toml",
+            mode: "save",
+            initialFilename: "settings.toml",
+            apiCall: api.selectSaveToml,
+            callback: (path) => {
+                if (path) newTomlPath = path;
+            },
+        });
     }
 
+    // Note: The previous selectSaveToml call was removed in favor of this picker.
+
     async function handleSelectNewMbxc() {
-        try {
-            const path = await api.selectFile();
-            if (path) newZipPath = path;
-        } catch (err) {
-            alert("Fehler bei Dateiauswahl: " + err.message);
-        }
+        smartPick({
+            title: "MBXC Datei wählen",
+            filter: "mbxc",
+            mode: "file",
+            apiCall: api.selectFile,
+            callback: (path) => {
+                if (path) newZipPath = path;
+            },
+        });
     }
 
     async function handleCreateConfig() {
@@ -499,6 +572,17 @@
         {/if}
     </main>
 </div>
+
+{#if showPicker}
+    <FileSystemPicker
+        title={pickerTitle}
+        filter={pickerFilter}
+        mode={pickerMode}
+        initialFilename={pickerInitialFilename}
+        on:select={handlePickerSelect}
+        on:close={() => (showPicker = false)}
+    />
+{/if}
 
 <style>
     :root {

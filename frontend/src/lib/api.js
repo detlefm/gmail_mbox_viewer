@@ -112,6 +112,22 @@ export async function restartWithSettings(settingsPath) {
     return response.json();
 }
 
+export async function getDrives() {
+    const response = await fetch(`${BASE_URL}/system/fs/drives`);
+    if (!response.ok) throw new Error("Failed to fetch drives");
+    return response.json();
+}
+
+export async function listDir(path, filter = "") {
+    const params = new URLSearchParams({ path, filter, show_files: "true" });
+    const response = await fetch(`${BASE_URL}/system/fs/ls?${params.toString()}`);
+    if (!response.ok) {
+        if (response.status === 403) throw new Error("Zugriff verweigert");
+        throw new Error("Verzeichnis konnte nicht geladen werden");
+    }
+    return response.json();
+}
+
 export async function inspectSettings(settingsPath) {
     const response = await fetch(`${BASE_URL}/system/inspect-toml`, {
         method: 'POST',

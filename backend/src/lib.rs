@@ -275,6 +275,8 @@ pub async fn run_server_with_state(
                 .route("/system/convert", post(api::convert_mbox))
                 .route("/system/convert/status", get(api::get_convert_status))
                 .route("/system/convert/abort", post(api::abort_convert))
+                .route("/system/fs/drives", get(api::list_drives))
+                .route("/system/fs/ls", get(api::list_dir))
                 .route("/system/settings", post(api::update_settings))
                 .route("/system/restart", post(api::restart_with_settings)),
         )

@@ -8,14 +8,16 @@
   --error-color: #ff3b30;
 }
 
-:root.dark {
-  --bg-color: #2f2f2f;
-  --text-color: #f6f6f6;
-  --container-bg: #3d3d3d;
-  --input-bg: #1e1e1e;
-  --border-color: #555;
-  --accent-color: #0a84ff;
-  --error-color: #ff453a;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #2f2f2f;
+    --text-color: #f6f6f6;
+    --container-bg: #3d3d3d;
+    --input-bg: #1e1e1e;
+    --border-color: #555;
+    --accent-color: #0a84ff;
+    --error-color: #ff453a;
+  }
 }
 
 .hidden {
@@ -51,11 +53,6 @@ body {
   margin-bottom: 15px;
 }
 
-#theme-toggle {
-  cursor: pointer;
-  font-size: 1.5rem;
-  user-select: none;
-}
 
 fieldset {
   border: 1px solid var(--border-color);

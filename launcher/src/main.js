@@ -5,7 +5,7 @@ const elPortInput = document.getElementById('port-input');
 const elBrowserInput = document.getElementById('browser-input');
 const elLogs = document.getElementById('log-container');
 const globalActions = document.getElementById('global-actions');
-const pathWarning = document.getElementById('port-warning');
+const portWarning = document.getElementById('port-warning');
 
 const btnApplyAll = document.getElementById('btn-apply-all');
 const btnCancelAll = document.getElementById('btn-cancel-all');

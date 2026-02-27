@@ -11,12 +11,26 @@
 - **Start-Prozess:** - Liest `metadata.db` einmalig komplett in den Speicher.
     - Bereitet die Daten für effiziente Filterung vor (In-Memory SQLite).
 - **ZIP-Handling:** - Die ZIP wird nicht entpackt. Einzelne `.eml`-Dateien werden on-demand extrahiert.
-- **API-Endpunkte:**
-    - `GET /labels`: Liefert die Liste aller GMail-Labels aus den Metadaten.
-    - `POST /query`: Nimmt Suchparameter entgegen (Sender, DateRange, Attachment-Flag, Subject-String).
-    - `GET /messages/{id}`: Extrahiert und liefert die EML-Inhalte.
-    - `GET /messages/{id}/attachment/{filename}`: Streamt Anhänge direkt aus der EML/ZIP.
-    - `GET /system/info`: Liefert die aktuellen Einstellungen.
+- **API-Endpunkte (Präfix `/api`):**
+    - **Daten & Suche:**
+        - `GET /labels`: Liste aller verfügbaren GMail-Labels.
+        - `POST /query`: Suche mit Filtern (Subject, Sender, Date, Attachments, Label).
+    - **Nachrichten-Details:**
+        - `GET /messages/{id}`: EML-Inhalt und Metadaten einer Mail.
+        - `GET /messages/{id}/attachment/{filename}`: Binär-Stream eines Anhangs.
+    - **System & Management:**
+        - `GET /system/info`: Aktueller Status (Pfade, Port, Ladezustand).
+        - `POST /system/settings`: Speichert Änderungen (Browser, ZIP-Pfad) in die aktuelle TOML.
+        - `POST /system/restart`: Schaltet auf eine andere `.toml` Konfigurationsdatei um.
+        - `POST /system/create-settings`: Erstellt eine neue Konfigurationsdatei und lädt diese.
+        - `POST /system/inspect-toml`: Prüft den Inhalt einer `.toml` Datei vor dem Laden.
+    - **Konvertierung:**
+        - `POST /system/convert`: Startet die MBOX -> MBXC Konvertierung.
+        - `GET /system/convert/status`: Status & Fortschritt der laufenden Konvertierung.
+        - `POST /system/convert/abort`: Bricht die laufende Konvertierung ab.
+    - **Dateiauswahl (via native Dialoge):**
+        - `POST /system/select-file` / `/select-save-file`: Dateiauswahl für Archive.
+        - `POST /system/select-toml` / `/select-toml-save`: Dateiauswahl für Konfigurationen.
     
 
 ## 3. Frontend-Logik (Svelte)

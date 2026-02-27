@@ -14,6 +14,7 @@ Der **Gmail Archive Viewer** löst dieses Problem:
 - **Vertrautheit:** Das Design ist an das bekannte Gmail-Layout angelehnt.
 - **Privatsphäre:** Alles läuft lokal auf deinem Rechner. Keine Daten werden in die Cloud hochgeladen.
 - **Vollständigkeit:** Anhänge können direkt angesehen und heruntergeladen werden.
+- **Launcher-Komfort:** Ein schlankes Tray-Menü steuert Server und Einstellungen.
 
 ### So nutzt du die App
 
@@ -38,6 +39,17 @@ Du musst der App nicht manuell über Textdateien sagen, was sie öffnen soll –
 - Sobald eine gültige Konfiguration geladen ist, zeigt die App deine E-Mails im vertrauten Gmail-Design.
 - Du kannst blitzschnell suchen, nach Labels filtern und Anhänge direkt im Browser ansehen oder herunterladen.
 - Falls du beim Start noch keine Daten hast, bleibt der Button **Open Frontend** im System-Menü (Tray) dennoch aktiv, damit du die Einstellungen öffnen und dein erstes Archiv einrichten kannst.
+
+#### 5. Launcher & Tray-Menü
+Der Launcher läuft im Hintergrund (im System-Tray / Menüleiste):
+- **Tray-Menü:** Erreichbar über das App-Icon oben (Mac) oder unten rechts (Windows/Linux):
+    - `Open Frontend`: Öffnet den Viewer im Standardbrowser.
+    - `System`: Öffnet das Management-Fenster für Einstellungen.
+    - `Quit`: Beendet die App vollständig.
+- **Management-Fenster (System):**
+    - **Port:** Ändere den Netzwerk-Port (z. B. 8000), falls dieser belegt ist.
+    - **Browser:** Wähle optional einen spezifischen Browser für die Darstellung.
+    - **Live-Logs:** Ein integriertes Fenster zeigt Echtzeit-Nachrichten des Backends an – hilfreich zur Kontrolle des Ladevorgangs oder bei Fehlern.
 
 ---
 

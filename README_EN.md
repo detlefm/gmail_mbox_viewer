@@ -14,6 +14,7 @@ The **Gmail Archive Viewer** solves this:
 - **Familiarity:** The design is based on the well-known Gmail layout.
 - **Privacy:** Everything runs locally on your machine. No data is uploaded to the cloud.
 - **Completeness:** View and download attachments directly.
+- **Launcher Convenience:** A sleek tray menu controls the server and settings.
 
 ### How to use the App (Step-by-Step)
 
@@ -36,6 +37,17 @@ You don't need to manually edit text files to tell the app what to open – you 
 - Once a valid configuration is loaded, the app displays your emails in the familiar Gmail design.
 - You can search instantly, filter by labels, and view or download attachments directly in your browser.
 - If you don't have data at startup, the **Open Frontend** button in the system menu (tray) remains active so you can open the settings and set up your first archive.
+
+#### 5. Launcher & Tray Menu
+The launcher runs in the background (in your system tray / menu bar):
+- **Tray Menu:** Accessible via the app icon at the top (Mac) or bottom-right (Windows/Linux):
+    - `Open Frontend`: Opens the viewer in your default browser.
+    - `System`: Opens the management window for settings.
+    - `Quit`: Terminates the app completely.
+- **Management Window (System):**
+    - **Port:** Change the network port (e.g., 8000) if it's already in use.
+    - **Browser:** Optionally choose a specific browser for viewing.
+    - **Live Logs:** An integrated window shows real-time messages from the backend – useful for monitoring the loading process or troubleshooting.
 
 ---
 

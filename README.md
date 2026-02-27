@@ -22,32 +22,22 @@ Der **Gmail Archive Viewer** löst dieses Problem:
 #### 1. Datenexport
 Nutze [Google Takeout](https://takeout.google.com/), um deine Gmail-Daten herunterzuladen. Wähle dabei das Format **MBOX**. Du erhältst nach Abschluss des Exports eine oder mehrere `.mbox`-Dateien.
 
-#### 2. Daten für die App vorbereiten (Indizierung)
-Die App benötigt ein optimiertes Container-Format (`.mbxc`), um schnell suchen zu können. Dabei wird deine Original-MBOX-Datei ausgelesen und ein Index erstellt. Deine `.mbox`-Datei bleibt dabei unverändert erhalten.
-
-Führe das mitgelieferte Tool `mbox2zip` aus:
-```bash
-# Beispiel für die Nutzung
-./mbox2zip --input meine_mails.mbox --output archiv.mbxc
-```
-*Hinweis: Dieser Vorgang erzeugt die `.mbxc`-Datei, die alle Mails und den Suchindex in komprimierter Form enthält.*
-
-#### 3. Einstellungen konfigurieren
-Die App benötigt Informationen darüber, welche Datei sie öffnen soll.
-- Kopiere die Datei `settingsample.toml` und nenne sie `settings.toml`.
-- Öffne die `settings.toml` in einem Texteditor deiner Wahl.
-- Trage unter `zip_path` den vollständigen Pfad zu deiner im vorigen Schritt erstellten `.mbxc`-Datei ein:
-  ```toml
-  zip_path = "/Dein/Pfad/zu/archiv.mbxc"
-  ```
-- Optional: Du kannst unter `filter_labels` Labels definieren, die in der App ausgeblendet werden sollen (z.B. "Spam" oder "Wichtig").
-
-#### 4. App starten & Nutzen
+#### 2. Daten für die App vorbereiten (Konvertierung)
+Die App nutzt ein optimiertes Container-Format (`.mbxc`), um blitzschnelle Suchen zu ermöglichen. Du kannst deine MBOX-Dateien direkt in der App konvertieren:
 - Starte den **Gmail Archive Viewer**.
-- Die App lädt beim Start automatisch die in der `settings.toml` hinterlegte Datei.
-- Beim ersten Start wird die `.mbxc`-Datei eingelesen und ein Index erstellt. Dies kann je nach Größe der Datei einige Zeit dauern.
-- Mit "Settings" kann die `.mbxc`-Datei gewechselt werden. Das ist beim ersten Start notwendig da die App den Pfad zur `.toml`-Datei nicht automatisch finden kann.
-- Du kannst nun in der Weboberfläche der App blitzschnell durch deine E-Mails browsen, nach Absendern oder Betreffzeilen suchen und Anhänge öffnen.
+- Gehe zu **Einstellungen** (Zahnrad-Icon) -> **Konvertieren**.
+- Wähle deine `.mbox`-Quelldatei und einen Zielpfad für die neue `.mbxc`-Datei aus.
+- Klicke auf **Konvertierung starten**. Die App erstellt nun den Index. Deine Original-MBOX bleibt dabei unverändert.
+
+#### 3. Einstellungen & neue Archive
+Du musst der App nicht manuell über Textdateien sagen, was sie öffnen soll – das geht bequem über die Oberfläche:
+- **Neue Konfiguration:** Gehe in den **Einstellungen** auf den Reiter **Neue Konfiguration**. Dort kannst du einen Namen für deine neue `.toml`-Einstellungsdatei vergeben, die passende `.mbxc`-Datenquelle auswählen und Filter (z.B. für Spam) definieren.
+- **Wechseln:** Unter **System** kannst du jederzeit zwischen verschiedenen Konfigurationsdateien hin- und herwechseln. Die App lädt die Daten sofort im Hintergrund neu.
+
+#### 4. App nutzen
+- Sobald eine gültige Konfiguration geladen ist, zeigt die App deine E-Mails im vertrauten Gmail-Design.
+- Du kannst blitzschnell suchen, nach Labels filtern und Anhänge direkt im Browser ansehen oder herunterladen.
+- Falls du beim Start noch keine Daten hast, bleibt der Button **Open Frontend** im System-Menü (Tray) dennoch aktiv, damit du die Einstellungen öffnen und dein erstes Archiv einrichten kannst.
 
 ---
 

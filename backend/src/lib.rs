@@ -145,12 +145,13 @@ pub fn init_app_state(
     settings_path: Option<PathBuf>,
     log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<AppState, Box<dyn std::error::Error + Send + Sync>> {
-    let raw = load_all_data(settings_path, log_tx)?;
+    let raw = load_all_data(settings_path, log_tx.clone())?;
     Ok(AppState::new(
         raw.settings,
         raw.metadata,
         raw.db_conn,
         raw.archive,
+        log_tx,
     ))
 }
 

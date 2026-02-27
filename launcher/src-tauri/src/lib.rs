@@ -91,8 +91,7 @@ fn get_current_settings(state: State<AppState>) -> String {
     state.current_settings_path.lock().unwrap().clone()
 }
 
-#[tauri::command]
-fn get_app_status(state: State<AppState>) -> AppStatus {
+fn internal_get_app_status(state: &AppState) -> AppStatus {
     AppStatus {
         settings_path: state.current_settings_path.lock().unwrap().clone(),
         mbxc_path: state.mbxc_path.lock().unwrap().clone(),
@@ -102,6 +101,11 @@ fn get_app_status(state: State<AppState>) -> AppStatus {
         error: state.startup_error.lock().unwrap().clone(),
         messages: state.messages.lock().unwrap().iter().cloned().collect(),
     }
+}
+
+#[tauri::command]
+fn get_app_status(state: State<'_, AppState>) -> AppStatus {
+    internal_get_app_status(&state)
 }
 
 #[tauri::command]
@@ -396,6 +400,25 @@ fn start_backend_server(
                         }
                     }
                 }
+            }
+            // Handle notification from backend that the settings path has changed
+            else if msg.starts_with("SETTINGS_PATH:") {
+                let new_path = msg[14..].trim().to_string();
+                if !new_path.is_empty() {
+                    let mut path_guard = state.current_settings_path.lock().unwrap();
+                    *path_guard = new_path.clone();
+                    
+                    let port = *state.port.lock().unwrap();
+                    let browser = state.browser.lock().unwrap().clone();
+                    save_config(&app_clone, &new_path, port, browser);
+                    println!("Persisted new settings path from backend: {}", new_path);
+                }
+            }
+            else if msg.starts_with("MBXC_PATH:") {
+                let mbxc_path = msg[10..].trim().to_string();
+                *state.mbxc_path.lock().unwrap() = mbxc_path.clone();
+                // Emit event to update UI
+                let _ = app_clone.emit("backend-config", internal_get_app_status(&state));
             }
         }
     });

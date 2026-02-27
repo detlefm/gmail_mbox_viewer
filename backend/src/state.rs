@@ -34,6 +34,7 @@ pub struct AppState {
     pub instance_id: Arc<Mutex<String>>,
     pub conversion_status: Arc<Mutex<ConversionStatus>>,
     pub conversion_abort: Arc<AtomicBool>,
+    pub log_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>>,
 }
 
 impl AppState {
@@ -42,6 +43,7 @@ impl AppState {
         metadata: Vec<MetadataEntry>,
         db_conn: Option<Connection>,
         zip_archive: Option<ZipArchive<File>>,
+        log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
     ) -> Self {
         let instance_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -78,6 +80,7 @@ impl AppState {
             instance_id: Arc::new(Mutex::new(instance_id)),
             conversion_status: Arc::new(Mutex::new(ConversionStatus::default())),
             conversion_abort: Arc::new(AtomicBool::new(false)),
+            log_tx: Arc::new(Mutex::new(log_tx)),
         }
     }
 

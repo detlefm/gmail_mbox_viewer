@@ -604,7 +604,13 @@ pub async fn update_settings(
     // Hot reload
     match crate::load_all_data(Some(settings_path), None) {
         Ok(raw) => {
-            state.apply_new_data(raw.settings, raw.metadata, raw.db_conn, raw.archive);
+            state.apply_new_data(raw.settings.clone(), raw.metadata, raw.db_conn, raw.archive);
+
+            // Notify launcher to update UI
+            if let Some(tx) = state.log_tx.lock().unwrap().as_ref() {
+                let _ = tx.send(format!("MBXC_PATH:{}", raw.settings.zip_path));
+            }
+
             Ok(Json(serde_json::json!({ "status": "success" })))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
@@ -623,9 +629,16 @@ pub async fn restart_with_settings(
     let next_path = PathBuf::from(req.settings_path);
 
     // Hot reload from new toml
-    match crate::load_all_data(Some(next_path), None) {
+    match crate::load_all_data(Some(next_path.clone()), None) {
         Ok(raw) => {
-            state.apply_new_data(raw.settings, raw.metadata, raw.db_conn, raw.archive);
+            state.apply_new_data(raw.settings.clone(), raw.metadata, raw.db_conn, raw.archive);
+
+            // Notify launcher to persist the new path and update UI
+            if let Some(tx) = state.log_tx.lock().unwrap().as_ref() {
+                let _ = tx.send(format!("SETTINGS_PATH:{}", next_path.display()));
+                let _ = tx.send(format!("MBXC_PATH:{}", raw.settings.zip_path));
+            }
+
             Ok(Json(serde_json::json!({ "status": "success" })))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),

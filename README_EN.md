@@ -45,7 +45,7 @@ The launcher runs in the background (in your system tray / menu bar):
     - `System`: Opens the management window for settings.
     - `Quit`: Terminates the app completely.
 - **Management Window (System):**
-    - **Port:** Change the network port (e.g., 8000) if it's already in use.
+    - **Port:** Change the network port (e.g., 8092) if it's already in use.
     - **Browser:** Optionally choose a specific browser for viewing.
     - **Live Logs:** An integrated window shows real-time messages from the backend – useful for monitoring the loading process or troubleshooting.
 

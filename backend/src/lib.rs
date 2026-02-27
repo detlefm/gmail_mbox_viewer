@@ -311,6 +311,6 @@ pub async fn run_server(
     frontend_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state = init_app_state(settings_path, log_tx.clone())?;
-    let port = port_override.unwrap_or(8000);
+    let port = port_override.unwrap_or(8092);
     run_server_with_state(state, port, shutdown_signal, log_tx, frontend_path).await
 }

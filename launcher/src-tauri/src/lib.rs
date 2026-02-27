@@ -567,7 +567,7 @@ pub fn run() {
             current_settings_path: Mutex::new(String::from("../settings.toml")),
             startup_error: Mutex::new(None),
             mbxc_path: Mutex::new(String::new()),
-            port: Mutex::new(8000),
+            port: Mutex::new(8092),
             browser: Mutex::new(None),
             status: Mutex::new(String::from("Stopped")),
             messages: Mutex::new(VecDeque::new()),

@@ -47,7 +47,7 @@ Der Launcher läuft im Hintergrund (im System-Tray / Menüleiste):
     - `System`: Öffnet das Management-Fenster für Einstellungen.
     - `Quit`: Beendet die App vollständig.
 - **Management-Fenster (System):**
-    - **Port:** Ändere den Netzwerk-Port (z. B. 8000), falls dieser belegt ist.
+    - **Port:** Ändere den Netzwerk-Port (z. B. 8092), falls dieser belegt ist.
     - **Browser:** Wähle optional einen spezifischen Browser für die Darstellung.
     - **Live-Logs:** Ein integriertes Fenster zeigt Echtzeit-Nachrichten des Backends an – hilfreich zur Kontrolle des Ladevorgangs oder bei Fehlern.
 

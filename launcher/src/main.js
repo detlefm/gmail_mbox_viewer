@@ -12,7 +12,7 @@ const btnCancelAll = document.getElementById('btn-cancel-all');
 const btnCopy = document.getElementById('btn-copy-logs');
 
 let lastKnownSettingsPath = "";
-let lastKnownPort = 8000;
+let lastKnownPort = 8092;
 let lastKnownBrowser = "";
 
 // --- App Logic ---
@@ -33,10 +33,10 @@ function addLog(msg) {
 async function initialLoad() {
   try {
     const status = await invoke('get_app_status');
-    elPortInput.value = status.port || 8000;
+    elPortInput.value = status.port || 8092;
     elBrowserInput.value = status.browser || "";
     lastKnownSettingsPath = status.settings_path;
-    lastKnownPort = status.port || 8000;
+    lastKnownPort = status.port || 8092;
     lastKnownBrowser = status.browser || "";
 
     status.messages.forEach(msg => addLog(msg));

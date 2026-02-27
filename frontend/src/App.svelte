@@ -24,6 +24,7 @@
   // Instance tracking for backend restarts
   let lastInstanceId = null;
   let lastZipPath = null;
+  let settingsPath = "";
   let dbLoaded = false;
   let initLoading = true;
   let isBackendLoading = true;
@@ -65,6 +66,7 @@
       const prevLoading = isBackendLoading;
       lastInstanceId = info.instance_id;
       lastZipPath = info.zip_path;
+      settingsPath = info.settings_path || "";
       dbLoaded = info.db_loaded;
       isBackendLoading = !backendReady;
 
@@ -78,11 +80,7 @@
         // Successful transition: wait a tiny bit to ensure backend is fully ready
         setTimeout(async () => {
           await loadLabels();
-          if (!selectedLabel || selectedLabel === "INBOX") {
-            handleAutoDetectLabel();
-          } else {
-            await loadMessages({ label: selectedLabel });
-          }
+          handleAutoDetectLabel();
         }, 100);
       }
 
@@ -237,6 +235,11 @@
     selectedMessage = null;
     selectedMessageId = null;
     loadMessages({ label: selectedLabel });
+
+    // Save selection
+    if (typeof localStorage !== "undefined" && settingsPath) {
+      localStorage.setItem(`lastLabel:${settingsPath}`, label);
+    }
   }
 
   function handleSimpleSearch(detail) {
@@ -252,6 +255,11 @@
     selectedMessageId = null;
     loadMessages(q);
     showSearchPopup = false;
+
+    // Save selection
+    if (typeof localStorage !== "undefined" && settingsPath && q.label) {
+      localStorage.setItem(`lastLabel:${settingsPath}`, q.label);
+    }
   }
 
   async function handleMessageSelect(summary) {
@@ -397,6 +405,17 @@
     ];
 
     let initialLabel = "";
+
+    // Try to load last used label for this settings file
+    if (typeof localStorage !== "undefined" && settingsPath) {
+      const saved = localStorage.getItem(`lastLabel:${settingsPath}`);
+      if (saved && labels.includes(saved)) {
+        selectedLabel = saved;
+        loadMessages({ label: saved });
+        return;
+      }
+    }
+
     if (labels.includes("Posteingang")) {
       initialLabel = "Posteingang";
     } else {
